@@ -88,14 +88,25 @@ run_targets_pipeline <- function(
   
   # Save inputs for passing to targets pipeline 
   # input_data |> CHANGE_ASSAY |> saveRDS("input_file.rds")
-  input_data |> saveRDS("input_file.rds")
-  input_reference |> saveRDS("input_reference.rds")
-  tissue |> saveRDS("tissue.rds")
-  computing_resources |> saveRDS("temp_computing_resources.rds")
-  filter_empty_droplets |> saveRDS("filter_empty_droplets.rds")
-  sample_column |> saveRDS("sample_column.rds")
-  cell_type_annotation_column |> saveRDS("cell_type_annotation_column.rds")
-  data_container_type |> saveRDS("data_container_type.rds")
+  input_data |> saveRDS(paste0(store, "input_file.rds"))
+  input_reference |> saveRDS(paste0(store, "input_reference.rds"))
+  tissue |> saveRDS(paste0(store, "tissue.rds"))
+  computing_resources |> saveRDS(paste0(store,"temp_computing_resources.rds"))
+  filter_empty_droplets |> saveRDS(paste0(store,"filter_empty_droplets.rds"))
+  sample_column |> saveRDS(paste0(store,"sample_column.rds"))
+  cell_type_annotation_column |> saveRDS(paste0(store,"cell_type_annotation_column.rds"))
+  data_container_type |> saveRDS(paste0(store, "data_container_type.rds"))
+  #unique_id <- format(Sys.time(), "%Y%m%d%H%M%OS3")
+  
+  # Save inputs for passing to targets pipeline with unique filenames
+  # saveRDS(input_data, paste0(store, "input_data_", unique_id, ".rds"))
+  # saveRDS(input_reference, paste0(store, "input_reference_", unique_id, ".rds"))
+  # saveRDS(tissue, paste0(store, "tissue_", unique_id, ".rds"))
+  # saveRDS(computing_resources, paste0(store, "computing_resources_", unique_id, ".rds"))
+  # saveRDS(filter_empty_droplets, paste0(store, "filter_empty_droplets_", unique_id, ".rds"))
+  # saveRDS(sample_column, paste0(store, "sample_column_", unique_id, ".rds"))
+  # saveRDS(cell_type_annotation_column, paste0(store, "cell_type_annotation_column_", unique_id, ".rds"))
+  # saveRDS(data_container_type, paste0(store, "data_container_type_", unique_id, ".rds"))
   # Write pipeline to a file
   tar_script({
     # library(targets)
@@ -103,7 +114,8 @@ run_targets_pipeline <- function(
     # library(crew)
     # library(crew.cluster)
     
-    computing_resources = readRDS("temp_computing_resources.rds")
+    computing_resources = readRDS(paste0(store,"temp_computing_resources.rds"))
+    #computing_resources = readRDS(paste0(store, "computing_resources_", unique_id, ".rds"))
     #-----------------------#
     # Packages
     #-----------------------#
@@ -203,15 +215,23 @@ run_targets_pipeline <- function(
     #   )
     
     target_list = list(
-      tar_target(file, "input_file.rds", format = "rds"), 
-      tar_target(read_file, readRDS("input_file.rds")),
-      #tar_target(reference_file, "input_reference.rds", format = "rds"), 
-      tar_target(reference_file, readRDS("input_reference.rds")), 
-      tar_target(tissue_file, readRDS("tissue.rds")), 
-      tar_target(filtered_file, readRDS("filter_empty_droplets.rds")), 
-      tar_target(sample_column_file, readRDS("sample_column.rds")), 
-      tar_target(cell_type_annotation_column_file, readRDS("cell_type_annotation_column.rds")),
-      tar_target(data_container_type_file, readRDS("data_container_type.rds")))
+      tar_target(file, paste0(store,"input_file.rds"), format = "rds"),
+      tar_target(read_file, readRDS(paste0(store,"input_file.rds"))),
+      #tar_target(reference_file, "input_reference.rds", format = "rds"),
+      tar_target(reference_file, readRDS(paste0(store,"input_reference.rds"))),
+      tar_target(tissue_file, readRDS(paste0(store,"tissue.rds"))),
+      tar_target(filtered_file, readRDS(paste0(store,"filter_empty_droplets.rds"))),
+      tar_target(sample_column_file, readRDS(paste0(store,"sample_column.rds"))),
+      tar_target(cell_type_annotation_column_file, readRDS(paste0(store,"cell_type_annotation_column.rds"))),
+      tar_target(data_container_type_file, readRDS(paste0(store,"data_container_type.rds"))))
+      # tar_target(file, paste0(store, "input_data_", unique_id, ".rds"), format = "rds"), 
+      # tar_target(read_file, readRDS(paste0(store, "input_data_", unique_id, ".rds"))),
+      # tar_target(reference_file, readRDS(paste0(store, "input_reference_", unique_id, ".rds"))), 
+      # tar_target(tissue_file, readRDS(paste0(store, "tissue_", unique_id, ".rds"))), 
+      # tar_target(filtered_file, readRDS(paste0(store, "filter_empty_droplets_", unique_id, ".rds"))), 
+      # tar_target(sample_column_file, readRDS(paste0(store, "sample_column_", unique_id, ".rds"))), 
+      # tar_target(cell_type_annotation_column_file, readRDS(paste0(store, "cell_type_annotation_column_", unique_id, ".rds"))),
+      # tar_target(data_container_type_file, readRDS(paste0(store, "data_container_type_", unique_id, ".rds"))))
     
     #-----------------------#
     # Pipeline
@@ -232,70 +252,96 @@ run_targets_pipeline <- function(
       tar_target(reference_label_coarse, reference_label_coarse_id(tissue), deployment = "main"), 
       tar_target(reference_label_fine, reference_label_fine_id(tissue), deployment = "main"), 
       # Reading input files
-      tar_target(input_read, read_data_container(read_file, container_type = data_container_type_file |> quo_name()),
-                 pattern = map(read_file),
-                 iteration = "list"),
+      tar_target(file_path, read_file, pattern = map(read_file), format = "file", deployment = "main"),
       tar_target(unique_tissues,
-                 get_unique_tissues(input_read, sample_column |> quo_name()),
-                 pattern = map(input_read),
-                 iteration = "list", deployment = "main"),
+                 get_unique_tissues(read_data_container(file_path, container_type = data_container_type_file), sample_column |> quo_name()),
+                 pattern = map(file_path),
+                 iteration = "list"),
       # tar_target(
       #   tissue_subsets,
       #   input_read, split.by = "Tissue"),
       #   pattern = map(input_read),
       #   iteration = "list"
       # ),
+      # Reading input files
+      # tar_target(input_read, read_data_container(read_file, container_type = data_container_type),
+      #            pattern = map(read_file),
+      #            iteration = "list"),
+      # tar_target(unique_tissues,
+      #            get_unique_tissues(input_read, sample_column |> quo_name()),
+      #            pattern = map(input_read),
+      #            iteration = "list", deployment = "main"),
       tar_target(reference_read, reference_file, deployment = "main"),
-
+      
       # Identifying empty droplets
       tar_target(empty_droplets_tbl,
-                 empty_droplet_id(input_read, filter_empty_droplets),
-                 pattern = map(input_read),
+                 empty_droplet_id(read_data_container(file_path, container_type = data_container_type_file), filter_empty_droplets),
+                 pattern = map(file_path),
                  iteration = "list"),
+      # tar_target(input_read, read_data_container(read_file, container_type = data_container_type_file |> quo_name()),
+      #            pattern = map(read_file),
+      #            iteration = "list"),
+      # tar_target(unique_tissues,
+      #            get_unique_tissues(input_read, sample_column |> quo_name()),
+      #            pattern = map(input_read),
+      #            iteration = "list", deployment = "main"),
+      # # tar_target(
+      # #   tissue_subsets,
+      # #   input_read, split.by = "Tissue"),
+      # #   pattern = map(input_read),
+      # #   iteration = "list"
+      # # ),
+      # tar_target(reference_read, reference_file, deployment = "main"),
+      # 
+      # Identifying empty droplets
+      # tar_target(empty_droplets_tbl,
+      #            empty_droplet_id(input_read, filter_empty_droplets),
+      #            pattern = map(input_read),
+      #            iteration = "list"),
 
       # Cell cycle scoring
-      tar_target(cell_cycle_score_tbl, cell_cycle_scoring(input_read,
+      tar_target(cell_cycle_score_tbl, cell_cycle_scoring(read_data_container(file_path, container_type = data_container_type_file ),
                                                           empty_droplets_tbl),
-                 pattern = map(input_read,
+                 pattern = map(file_path,
                                empty_droplets_tbl),
                  iteration = "list"),
-
-      # Annotation label transfer
+ 
+      # # Annotation label transfer
       tar_target(annotation_label_transfer_tbl,
-                 annotation_label_transfer(input_read,
+                 annotation_label_transfer(read_data_container(file_path, container_type = data_container_type_file),
                                            empty_droplets_tbl,
                                            reference_read),
-                 pattern = map(input_read,
+                 pattern = map(file_path,
                                empty_droplets_tbl),
                  iteration = "list"),
 
       # Alive identification
-      tar_target(alive_identification_tbl, alive_identification(input_read,
+      tar_target(alive_identification_tbl, alive_identification(read_data_container(file_path, container_type = data_container_type_file),
                                                                 empty_droplets_tbl,
                                                                 annotation_label_transfer_tbl),
-                 pattern = map(input_read,
+                 pattern = map(file_path,
                                empty_droplets_tbl,
                                annotation_label_transfer_tbl),
                  iteration = "list"),
 
       # Doublet identification
-      tar_target(doublet_identification_tbl, doublet_identification(input_read,
+      tar_target(doublet_identification_tbl, doublet_identification(read_data_container(file_path, container_type = data_container_type_file),
                                                                     empty_droplets_tbl,
                                                                     alive_identification_tbl,
                                                                     annotation_label_transfer_tbl,
                                                                     reference_label_fine),
-                 pattern = map(input_read,
+                 pattern = map(file_path,
                                empty_droplets_tbl,
                                alive_identification_tbl,
                                annotation_label_transfer_tbl),
                  iteration = "list"),
 
       # Non-batch variation removal
-      tar_target(non_batch_variation_removal_S, non_batch_variation_removal(input_read,
+      tar_target(non_batch_variation_removal_S, non_batch_variation_removal(read_data_container(file_path, container_type = data_container_type_file),
                                                                             empty_droplets_tbl,
                                                                             alive_identification_tbl,
                                                                             cell_cycle_score_tbl),
-                 pattern = map(input_read,
+                 pattern = map(file_path,
                                empty_droplets_tbl,
                                alive_identification_tbl,
                                cell_cycle_score_tbl),
@@ -401,8 +447,8 @@ run_targets_pipeline <- function(
   
   message(glue("HPCell says: you can read your output executing tar_read(preprocessing_output_S, store = \"{store}\") "))
   #tar_meta_download(store = store)
-  metadata<- tar_meta(store = store)
-  return(metadata)
+  # metadata<- tar_meta(store = store)
+  # return(metadata)
   #tar_read(preprocessing_output_S, store = store)
   
 }
