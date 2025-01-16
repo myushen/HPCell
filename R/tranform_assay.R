@@ -146,6 +146,7 @@ transform_utility  = function(input_read_RNA_assay, transform_fx, external_path,
   # Subtract the mode value from counts if it is not zero
   if (majority_gene_counts != 0) {
     counts <- counts - majority_gene_counts
+    counts_light_for_checks <- counts_light_for_checks - majority_gene_counts
   }
   
   # Replace negative counts with zero to avoid downstream failures
