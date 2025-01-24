@@ -1208,6 +1208,7 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @importFrom SummarizedExperiment rowData
 #' @importFrom digest digest
 #' @importFrom HDF5Array saveHDF5SummarizedExperiment
+#' @importFrom SingleCellExperiment SingleCellExperiment
 #' 
 #' @export
 
@@ -1220,7 +1221,8 @@ create_pseudobulk <- function(input_read_RNA_assay,
                               annotation_label_transfer_tbl = NULL,
                               doublet_identification_tbl = NULL,  
                               x = c() , 
-                              external_path, assays = NULL) {
+                              external_path, assays = NULL,
+                              container_type) {
   #Fix GChecks 
   .sample = NULL 
   .feature = NULL 
@@ -1266,6 +1268,7 @@ create_pseudobulk <- function(input_read_RNA_assay,
     as_SummarizedExperiment(.sample, .feature, any_of(assays)) 
   
   rowData(pseudobulk)$feature_name = rownames(pseudobulk)
+  colData(pseudobulk)$pseudobulk_sample = colnames(pseudobulk)
   
   pseudobulk = pseudobulk |>
     pivot_longer(cols = assays, names_to = "data_source", values_to = "count") |>
@@ -1277,19 +1280,31 @@ create_pseudobulk <- function(input_read_RNA_assay,
     mutate(data_source = stringr::str_remove(data_source, "abundance_")) |>
     unite(".feature", c(symbol, data_source), remove = FALSE) |>
     
-    # Covert
     as_SummarizedExperiment(
       .sample = .sample,
       .transcript = .feature,
       .abundance = count
     ) 
   
+  # Covert pseudobulk to SCE representation as save_experiment_data 
+  #  does not support saving SummarizedExperiment
+  if (container_type == "anndata") {
+    pseudobulk = SingleCellExperiment(
+      assays = assays(pseudobulk),
+      rowData = rowData(pseudobulk),
+      colData = colData(pseudobulk)
+    )
+  }
+
   file_name = glue("{external_path}/{digest(pseudobulk)}")
   
   pseudobulk |>
     
     # Conver to H5
-    saveHDF5SummarizedExperiment(dir = file_name, replace=TRUE, as.sparse=TRUE)
+    save_experiment_data(
+      dir = file_name, 
+      container_type = container_type
+    )
   
 }
 

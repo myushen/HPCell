@@ -411,7 +411,8 @@ calculate_pseudobulk.HPCell = function(input_hpc, group_by = NULL, target_input 
       annotation_label_transfer_tbl = "annotation_tbl" |> is_target(),
       doublet_identification_tbl = "doublet_tbl" |> is_target(),
       x = group_by,
-      external_path = glue("{input_hpc$initialisation$store}/external")
+      external_path = glue("{input_hpc$initialisation$store}/external"),
+      container_type = data_container_type
     ) |> 
     
     # merge

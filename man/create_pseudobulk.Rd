@@ -14,7 +14,8 @@ create_pseudobulk(
   doublet_identification_tbl = NULL,
   x = c(),
   external_path,
-  assays = NULL
+  assays = NULL,
+  container_type
 )
 }
 \arguments{
