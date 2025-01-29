@@ -1094,8 +1094,9 @@ preprocessing_output <- function(input_read_RNA_assay,
                                  non_batch_variation_removal_S = NULL, 
                                  alive_identification_tbl = NULL, 
                                  cell_cycle_score_tbl = NULL, 
+                                 cell_type_ensembl_harmonised_tbl = NULL,
                                  annotation_label_transfer_tbl = NULL, 
-                                 doublet_identification_tbl){
+                                 doublet_identification_tbl = NULL){
   #Fix GCHECKS 
   .cell <- NULL
   alive <- NULL
@@ -1156,7 +1157,8 @@ preprocessing_output <- function(input_read_RNA_assay,
   try({
       if (inherits(annotation_label_transfer_tbl, "tbl_df")){
         input_read_RNA_assay <- input_read_RNA_assay |>
-          left_join(annotation_label_transfer_tbl, by = ".cell")
+          left_join(annotation_label_transfer_tbl, by = ".cell") |>
+          left_join(cell_type_ensembl_harmonised_tbl)
       }
     }, silent = TRUE)
   
@@ -1183,6 +1185,7 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @param x A grouping variable used to aggregate cells into pseudobulk samples.
 #' This variable should be present in the `preprocessing_output_S` object and 
 #' typically represents a factor such as sample ID or condition.
+#' @param container_type A character vector specifying the output file type. Ideally it should match to the input file type.
 #' @param ... Additional arguments passed to internal functions used within 
 #' `create_pseudobulk`. This includes parameters for customization of 
 #' aggregation, data transformation, or any other process involved in the 
@@ -1219,6 +1222,7 @@ create_pseudobulk <- function(input_read_RNA_assay,
                               alive_identification_tbl = NULL,
                               cell_cycle_score_tbl = NULL,
                               annotation_label_transfer_tbl = NULL,
+                              cell_type_ensembl_harmonised_tbl = NULL,
                               doublet_identification_tbl = NULL,  
                               x = c() , 
                               external_path, assays = NULL,
@@ -1236,10 +1240,11 @@ create_pseudobulk <- function(input_read_RNA_assay,
       input_read_RNA_assay,
       empty_droplets_tbl,
       non_batch_variation_removal_S = NULL, 
-      alive_identification_tbl, 
-      cell_cycle_score_tbl, 
+      alive_identification_tbl = NULL,
+      cell_cycle_score_tbl = NULL,
+      cell_type_ensembl_harmonised_tbl,
       annotation_label_transfer_tbl, 
-      doublet_identification_tbl
+      doublet_identification_tbl = NULL
     )
   
   
@@ -1286,8 +1291,8 @@ create_pseudobulk <- function(input_read_RNA_assay,
       .abundance = count
     ) 
   
-  # Covert pseudobulk to SCE representation as save_experiment_data 
-  #  does not support saving SummarizedExperiment
+  # Covert pseudobulk to SCE representation as zellkonverter::writeH5AD 
+  #  does not support saving a SummarizedExperiment
   if (container_type == "anndata") {
     pseudobulk = SingleCellExperiment(
       assays = assays(pseudobulk),
@@ -1300,7 +1305,7 @@ create_pseudobulk <- function(input_read_RNA_assay,
   
   pseudobulk |>
     
-    # Conver to H5
+    # Convert to Anndata
     save_experiment_data(
       dir = file_name, 
       container_type = container_type

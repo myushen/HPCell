@@ -10,8 +10,9 @@ preprocessing_output(
   non_batch_variation_removal_S = NULL,
   alive_identification_tbl = NULL,
   cell_cycle_score_tbl = NULL,
+  cell_type_ensembl_harmonised_tbl = NULL,
   annotation_label_transfer_tbl = NULL,
-  doublet_identification_tbl
+  doublet_identification_tbl = NULL
 )
 }
 \arguments{

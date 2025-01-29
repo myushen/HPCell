@@ -409,17 +409,18 @@ calculate_pseudobulk.HPCell = function(input_hpc, group_by = NULL, target_input 
       alive_identification_tbl = "alive_tbl" |> is_target(),
       cell_cycle_score_tbl = "cell_cycle_tbl" |> is_target(),
       annotation_label_transfer_tbl = "annotation_tbl" |> is_target(),
+      cell_type_ensembl_harmonised_tbl = "cell_type_concensus_tbl" |> is_target(),
       doublet_identification_tbl = "doublet_tbl" |> is_target(),
       x = group_by,
-      external_path = glue("{input_hpc$initialisation$store}/external"),
-      container_type = data_container_type
-    ) |> 
+      external_path = glue("{input_hpc$initialisation$store}/external") |> as.character(),
+      container_type = "data_container_type" |> is_target() 
+    ) |>
     
     # merge
     hpc_merge(
-      target_output = target_output, 
-      user_function = pseudobulk_merge |> quote(), 
-      external_path = glue("{input_hpc$initialisation$store}/external"),
+      target_output = target_output,
+      user_function = pseudobulk_merge |> quote(),
+      external_path = glue("{input_hpc$initialisation$store}/external") |> as.character(),
       pseudobulk_list = pseudobulk_sample |> is_target(),
       packages = c("tidySummarizedExperiment", "HPCell")
     )
@@ -482,65 +483,65 @@ get_single_cell.HPCell = function(input_hpc, target_input = "data_object", targe
 #' @param .contrasts Contrasts parameter.
 #' @return The result of the differential abundance test.
 #'
-setMethod(
-  "test_differential_abundance",
-  signature(.data = "HPCell"),
-  function(.data, .formula, .sample = NULL, .transcript = NULL, 
-           .abundance = NULL, contrasts = NULL, method = "edgeR_quasi_likelihood", 
-           test_above_log2_fold_change = NULL, scaling_method = "TMM", 
-           omit_contrast_in_colnames = FALSE, prefix = "", action = "add", factor_of_interest = NULL,
-           target_input = "pseudobulk_se", target_output = "de", group_by_column = NULL,
-           ..., significance_threshold = NULL, fill_missing_values = NULL, 
-           .contrasts = NULL) {
-    
-      if(.formula |> deparse() |> str_detect("\\|"))
-        factory_de_random_effect(
-          se_list_input = target_input, 
-          output_se = target_output, 
-          formula=.formula,
-          #method="edger_robust_likelihood_ratio", 
-          tiers = tiers,
-          factor_of_interest = factor_of_interest,
-          .abundance = .abundance
-        )
-      
-      else
-       
-        .data |> 
-          
-          hpc_single(
-            target_output = "chunk_tbl", 
-            user_function = function(x){ x |> rownames() |> feature_chunks()} |> quote(),
-            x = "pseudobulk_se" |> is_target() 
-          ) |> 
-        
-          hpc_single(
-            target_output = "pseudobulk_group_list", 
-            user_function = group_split |> quote(),
-            .tbl  = target_input  |> is_target(),
-            gr = as.name(gr) |> substitute(env = list(gr = group_by_column)),
-            packages = c("tidySummarizedExperiment", "S4Vectors", "targets"), 
-            
-            # I need this because targets does not know the output 
-            # is a list I need to iterate on outside the tiers
-            iterate = "map"
-          ) |> 
-          
-
-          hpc_iterate(
-            target_output = target_output, 
-            user_function = internal_de_function |> quote() , 
-            x = "pseudobulk_group_list" |> is_target(),
-            fi = factor_of_interest,
-            a = .abundance,
-            formul = .formula,
-            m = method,
-            packages="tidybulk"
-          ) 
-        
-      
-        
-})
+# setMethod(
+#   "test_differential_abundance",
+#   signature(.data = "HPCell"),
+#   function(.data, .formula, .sample = NULL, .transcript = NULL,
+#            .abundance = NULL, contrasts = NULL, method = "edgeR_quasi_likelihood",
+#            test_above_log2_fold_change = NULL, scaling_method = "TMM",
+#            omit_contrast_in_colnames = FALSE, prefix = "", action = "add", factor_of_interest = NULL,
+#            target_input = "pseudobulk_se", target_output = "de", group_by_column = NULL,
+#            ..., significance_threshold = NULL, fill_missing_values = NULL,
+#            .contrasts = NULL) {
+# 
+#       if(.formula |> deparse() |> str_detect("\\|"))
+#         factory_de_random_effect(
+#           se_list_input = target_input,
+#           output_se = target_output,
+#           formula=.formula,
+#           #method="edger_robust_likelihood_ratio",
+#           tiers = tiers,
+#           factor_of_interest = factor_of_interest,
+#           .abundance = .abundance
+#         )
+# 
+#       else
+# 
+#         .data |>
+# 
+#           hpc_single(
+#             target_output = "chunk_tbl",
+#             user_function = function(x){ x |> rownames() |> feature_chunks()} |> quote(),
+#             x = "pseudobulk_se" |> is_target()
+#           ) |>
+# 
+#           hpc_single(
+#             target_output = "pseudobulk_group_list",
+#             user_function = group_split |> quote(),
+#             .tbl  = target_input  |> is_target(),
+#             gr = as.name(gr) |> substitute(env = list(gr = group_by_column)),
+#             packages = c("tidySummarizedExperiment", "S4Vectors", "targets"),
+# 
+#             # I need this because targets does not know the output
+#             # is a list I need to iterate on outside the tiers
+#             iterate = "map"
+#           ) |>
+# 
+# 
+#           hpc_iterate(
+#             target_output = target_output,
+#             user_function = internal_de_function |> quote() ,
+#             x = "pseudobulk_group_list" |> is_target(),
+#             fi = factor_of_interest,
+#             a = .abundance,
+#             formul = .formula,
+#             m = method,
+#             packages="tidybulk"
+#           )
+# 
+# 
+# 
+# })
 
 
 # Define the generic function

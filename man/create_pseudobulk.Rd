@@ -11,6 +11,7 @@ create_pseudobulk(
   alive_identification_tbl = NULL,
   cell_cycle_score_tbl = NULL,
   annotation_label_transfer_tbl = NULL,
+  cell_type_ensembl_harmonised_tbl = NULL,
   doublet_identification_tbl = NULL,
   x = c(),
   external_path,
@@ -25,6 +26,8 @@ typically represents a factor such as sample ID or condition.}
 
 \item{assays}{A character vector specifying the assays to be included in the
 pseudobulk creation process, such as c("RNA", "ADT").}
+
+\item{container_type}{A character vector specifying the output file type. Ideally it should match to the input file type.}
 
 \item{preprocessing_output_S}{Processed dataset from preprocessing.}
 

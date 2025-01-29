@@ -52,7 +52,7 @@ transform_assay.HPCell = function(
 #' @param input_read_RNA_assay A SummarizedExperiment object to be transformed.
 #' @param transform_fx A function to apply to the assay of the SummarizedExperiment object.
 #' @param external_path A character string specifying the directory path to save the transformed object.
-#' @param data_container_type A character vector specifying the output file type. Ideally it should match to the input file type.
+#' @param container_type A character vector specifying the output file type. Ideally it should match to the input file type.
 #' @return The function does not return an object. It saves the transformed SummarizedExperiment object to the specified path.
 #'
 #' @importFrom SummarizedExperiment assay

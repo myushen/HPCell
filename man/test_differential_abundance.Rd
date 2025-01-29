@@ -2,30 +2,10 @@
 % Please edit documentation in R/modules_grammar_hpc.R
 \name{test_differential_abundance-HPCell-method}
 \alias{test_differential_abundance-HPCell-method}
+\alias{evaluate_hpc}
 \title{Test Differential Abundance for HPCell}
 \usage{
-\S4method{test_differential_abundance}{HPCell}(
-  .data,
-  .formula,
-  .sample = NULL,
-  .transcript = NULL,
-  .abundance = NULL,
-  contrasts = NULL,
-  method = "edgeR_quasi_likelihood",
-  test_above_log2_fold_change = NULL,
-  scaling_method = "TMM",
-  omit_contrast_in_colnames = FALSE,
-  prefix = "",
-  action = "add",
-  factor_of_interest = NULL,
-  target_input = "pseudobulk_se",
-  target_output = "de",
-  group_by_column = NULL,
-  ...,
-  significance_threshold = NULL,
-  fill_missing_values = NULL,
-  .contrasts = NULL
-)
+evaluate_hpc(input_hpc)
 }
 \arguments{
 \item{.data}{An HPCell object.}
