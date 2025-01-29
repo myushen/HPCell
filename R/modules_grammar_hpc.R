@@ -384,33 +384,12 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
 
 # Define the generic function
 #' @export
-preprocess_metacell <- function(input_hpc, target_input = "sce_transformed", target_output = "preprocessed_attributes_list", ...) {
-  UseMethod("preprocess_metacell")
-}
-
-#' @export
-preprocess_metacell.HPCell = function(input_hpc,  target_input = "sce_transformed", target_output = "preprocessed_attributes_list", ...) {
-  
-  input_hpc |> 
-    hpc_iterate(
-      target_output = target_output, 
-      user_function = preprocess_SCimplify |> quote() , 
-      input_read_RNA_assay = target_input |> is_target(), 
-      empty_droplets_tbl = "empty_tbl" |> is_target() ,
-      alive_identification_tbl = "alive_tbl" |> is_target(),
-      cell_cycle_score_tbl = "cell_cycle_tbl" |> is_target(),
-      ...
-    )
-}
-
-# Define the generic function
-#' @export
-cluster_metacell <- function(input_hpc, target_input = "preprocessed_attributes_list", target_output = "metacell_tbl", size_gamma_metacell, ...) {
+cluster_metacell <- function(input_hpc, target_input = "data_object", target_output = "metacell_tbl", size_gamma_metacell, ...) {
   UseMethod("cluster_metacell")
 }
 
 #' @export
-cluster_metacell.HPCell = function(input_hpc,  target_input = "preprocessed_attributes_list", 
+cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object", 
                                    target_output = "metacell_tbl", size_gamma_metacell, ...) {
   
   input_hpc |> 

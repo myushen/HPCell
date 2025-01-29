@@ -157,15 +157,15 @@ empty_droplet_id <- function(input_read_RNA_assay,
   # # Plot bar-codes ranks
   # plot_barcode_ranks =
   #   barcode_table %>%
-  #   ggplot2::ggplot(aes(rank, total)) +
-  #   geom_point(aes(color = empty_droplet, size = empty_droplet )) +
-  #   geom_line(aes(rank, fitted), color="purple") +
-  #   geom_hline(aes(yintercept = knee), color="dodgerblue") +
-  #   geom_hline(aes(yintercept = inflection), color="forestgreen") +
-  #   scale_x_log10() +
-  #   scale_y_log10() +
-  #   scale_color_manual(values = c("black", "#e11f28")) +
-  #   scale_size_discrete(range = c(0, 2)) +
+  #   ggplot2::ggplot(aes(rank, total)) 
+  #   geom_point(aes(color = empty_droplet, size = empty_droplet )) 
+  #   geom_line(aes(rank, fitted), color="purple") 
+  #   geom_hline(aes(yintercept = knee), color="dodgerblue") 
+  #   geom_hline(aes(yintercept = inflection), color="forestgreen") 
+  #   scale_x_log10() 
+  #   scale_y_log10() 
+  #   scale_color_manual(values = c("black", "#e11f28")) 
+  #   scale_size_discrete(range = c(0, 2)) 
   #   theme_bw()
   
   # plot_barcode_ranks |> saveRDS(output_path_plot_rds)
@@ -1262,11 +1262,16 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
     ...
   )
   
-  list(sc.nw = sc.nw, PCA.presampled = PCA.presampled, 
-       normalized_rna.for.pca = normalized_rna.for.pca, presampled.cell.ids = presampled.cell.ids, 
-       rest.cell.ids = rest.cell.ids, genes.use = genes.use, cell.ids = cell.ids,
-       do.approx = do.approx, n.pc = n.pc, k.knn = k.knn)
-  
+  list(sc.nw = sc.nw,
+       PCA.presampled = PCA.presampled,
+       normalized_rna.for.pca = normalized_rna.for.pca,
+       rest.cell.ids = rest.cell.ids,
+       genes.use = genes.use,
+       cell.ids = cell.ids,
+       do.approx = do.approx,
+       n.pc = n.pc,
+       k.knn = k.knn)
+
 }
 
 #' Detection of metacells with the SuperCell approach
@@ -1290,7 +1295,7 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
 #' @importFrom Matrix t
 #' @importFrom proxy dist
 #' @export
-SCimplify <- function(preprocessed,
+postprocess_SCimplify <- function(preprocessed,
                       cell.annotation = NULL,
                       cell.split.condition = NULL,
                       gamma,
@@ -1386,13 +1391,13 @@ SCimplify <- function(preprocessed,
     
     N.blocks <- length(rest.cell.ids) %/% block.size
     if (length(rest.cell.ids) %% block.size > 0)
-      N.blocks <- N.blocks + 1
+      N.blocks <- N.blocks+1
     
     
     if (N.blocks > 0) {
       for (i in 1:N.blocks) {
         # compute knn by blocks
-        idx.begin <- (i - 1) * block.size + 1
+        idx.begin <- (i - 1) * block.size+1
         idx.end   <- min(i * block.size, length(rest.cell.ids))
         
         cur.rest.cell.ids    <- rest.cell.ids[idx.begin:idx.end]
