@@ -1262,15 +1262,11 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
     ...
   )
   
-  list(sc.nw = sc.nw,
-       PCA.presampled = PCA.presampled,
-       normalized_rna.for.pca = normalized_rna.for.pca,
-       rest.cell.ids = rest.cell.ids,
-       genes.use = genes.use,
-       cell.ids = cell.ids,
-       do.approx = do.approx,
-       n.pc = n.pc,
-       k.knn = k.knn)
+  list(sc.nw = sc.nw, PCA.presampled = PCA.presampled, 
+       normalized_rna.for.pca = normalized_rna.for.pca, 
+       presampled.cell.ids = presampled.cell.ids, 
+       rest.cell.ids = rest.cell.ids, genes.use = genes.use, cell.ids = cell.ids,
+       do.approx = do.approx, n.pc = n.pc, k.knn = k.knn)
 
 }
 
