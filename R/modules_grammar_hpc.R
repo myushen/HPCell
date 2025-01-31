@@ -384,12 +384,16 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
 
 # Define the generic function
 #' @export
-calculate_pseudobulk <- function(input_hpc, group_by = NULL, target_input = "data_object", target_output = "pseudobulk_se") {
+calculate_pseudobulk <- function(input_hpc, group_by = NULL, target_input = "data_object", 
+                                 target_celltype_ensembl = "cell_type_concensus_tbl",
+                                 target_output = "pseudobulk_se") {
   UseMethod("calculate_pseudobulk")
 }
 
 #' @export
-calculate_pseudobulk.HPCell = function(input_hpc, group_by = NULL, target_input = "data_object", target_output = "pseudobulk_se") {
+calculate_pseudobulk.HPCell = function(input_hpc, group_by = NULL, target_input = "data_object", 
+                                       target_celltype_ensembl = "cell_type_concensus_tbl",
+                                       target_output = "pseudobulk_se") {
   
   pseudobulk_sample = 
     glue("{target_output}_iterated") |> 
@@ -409,7 +413,7 @@ calculate_pseudobulk.HPCell = function(input_hpc, group_by = NULL, target_input 
       alive_identification_tbl = "alive_tbl" |> is_target(),
       cell_cycle_score_tbl = "cell_cycle_tbl" |> is_target(),
       annotation_label_transfer_tbl = "annotation_tbl" |> is_target(),
-      cell_type_ensembl_harmonised_tbl = "cell_type_concensus_tbl" |> is_target(),
+      cell_type_ensembl_harmonised_tbl = target_celltype_ensembl |> is_target(),
       doublet_identification_tbl = "doublet_tbl" |> is_target(),
       x = group_by,
       external_path = glue("{input_hpc$initialisation$store}/external") |> as.character(),
