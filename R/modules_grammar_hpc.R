@@ -384,41 +384,23 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
 
 # Define the generic function
 #' @export
-preprocess_metacell <- function(input_hpc, target_input = "sce_transformed", target_output = "preprocessed_attributes_list", ...) {
-  UseMethod("preprocess_metacell")
-}
-
-#' @export
-preprocess_metacell.HPCell = function(input_hpc,  target_input = "sce_transformed", target_output = "preprocessed_attributes_list", ...) {
-  
-  input_hpc |> 
-    hpc_iterate(
-      target_output = target_output, 
-      user_function = preprocess_SCimplify |> quote() , 
-      input_read_RNA_assay = target_input |> is_target(), 
-      empty_droplets_tbl = "empty_tbl" |> is_target() ,
-      alive_identification_tbl = "alive_tbl" |> is_target(),
-      cell_cycle_score_tbl = "cell_cycle_tbl" |> is_target(),
-      ...
-    )
-}
-
-# Define the generic function
-#' @export
-cluster_metacell <- function(input_hpc, target_input = "preprocessed_attributes_list", target_output = "metacell_tbl", size_gamma_metacell, ...) {
+cluster_metacell <- function(input_hpc, target_input = "data_object", 
+                             target_celltype_ensembl = "cell_type_concensus_tbl",
+                             target_output = "metacell_tbl", ...) {
   UseMethod("cluster_metacell")
 }
 
 #' @export
-cluster_metacell.HPCell = function(input_hpc,  target_input = "preprocessed_attributes_list", 
-                                   target_output = "metacell_tbl", size_gamma_metacell, ...) {
+cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object", 
+                                   target_celltype_ensembl = "cell_type_concensus_tbl",
+                                   target_output = "metacell_tbl", ...) {
   
   input_hpc |> 
     hpc_iterate(
       target_output = target_output, 
-      user_function = SCimplify |> quote() , 
-      preprocessed = target_input |> is_target(), 
-      gamma = size_gamma_metacell,
+      user_function = split_sample_cell_type_calculate_metacell_membership |> quote() , 
+      sample_sce = target_input |> is_target(), 
+      cell_type = target_celltype_ensembl |> is_target(),
       ...
     )
 }

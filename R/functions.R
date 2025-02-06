@@ -1290,7 +1290,7 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
 #' @importFrom Matrix t
 #' @importFrom proxy dist
 #' @export
-SCimplify <- function(preprocessed,
+postprocess_SCimplify <- function(preprocessed,
                       cell.annotation = NULL,
                       cell.split.condition = NULL,
                       gamma,
@@ -1482,142 +1482,79 @@ SCimplify <- function(preprocessed,
   metacell_classification
 }
 
+#' Calculate Appropriate Gamma Values for Metacell Analysis
+#'
+#' This function determines viable gamma values to be used in metacell analysis. It calculates gamma values
+#' by doubling gamma until the quotient of the total cell count and gamma is less than the specified minimum
+#' number of cells per metacell.
+#'
+#' @param cell_count Integer, the total number of cells.
+#' @param min_cells_per_metacell Integer, the minimum number of cells per metacell. Defaults to 30.
+#' @return An Integer vector of viable gamma values. If no viable gamma values are found, returns 0.
+calculate_gamma <- function(cell_count, min_cells_per_metacell = 30) {
+  gamma = 2
+  gamma_values <- integer()
+  while (cell_count / gamma >= min_cells_per_metacell) {
+    gamma_values <- c(gamma_values, gamma)
+    gamma <- gamma * 2
+  }
+  if (length(gamma_values) == 0) {
+    return(0)  # Return 0 if no viable gamma values
+  }
+  return(gamma_values)
+}
 
-
-#' #' Metacell Clustering 
-#' #'
-#' #' @description
-#' #' This function processes single-cell RNA sequencing data to cluster cells into metacells,
-#' #' a higher resolution of clustering that groups cells sharing similar gene expression patterns.
-#' #'
-#' #' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
-#' #' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' #' @param alive_identification_tbl A tibble from alive cell identification.
-#' #' @param cell_cycle_score_tbl A tibble from cell cycle scoring.
-#' #' @param assay assay used, default = "RNA" 
-#' #'
-#' #' @return A tibble with column 'cell' and 'membership' indicating which metacell cluster each cell belongs to.
-#' #'
-#' #' @importFrom dplyr left_join filter
-#' #' @importFrom Seurat NormalizeData FindVariableFeatures ScaleData RunPCA RunUMAP
-#' #' @importFrom SummarizedExperiment assay assay<-
-#' #' @importFrom magrittr extract2
-#' #' @export
-#' cluster_metacell <- function(input_read_RNA_assay, 
-#'                                 empty_droplets_tbl = NULL, 
-#'                                 alive_identification_tbl = NULL, 
-#'                                 cell_cycle_score_tbl = NULL,
-#'                                 assay = NULL){
-#'   #Fix GChecks 
-#'   empty_droplet = NULL 
-#'   .cell <- NULL 
-#'   
-#'   # Metacell config
-#'   gamma = 50 # the requested graining level.
-#'   k_knn = 30 # the number of neighbors considered to build the knn network.
-#'   nb_var_genes = 2000 # number of the top variable genes to use for dimensionality reduction 
-#'   nb_pc = 50 # the number of principal components to use.   
-#'   
-#'   # Your code for non_batch_variation_removal function here
-#'   class_input = input_read_RNA_assay |> class()
-#'   
-#'   # Get assay
-#'   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
-#'   
-#'   if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
-#'     assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
-#'     
-#'     input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL, 
-#'                                                               counts = assay) 
-#'     
-#'     # Rename assay
-#'     assay_name_old = DefaultAssay(input_read_RNA_assay)
-#'     input_read_RNA_assay_transform = input_read_RNA_assay |>
-#'       RenameAssays(
-#'         assay.name = assay_name_old,
-#'         new.assay.name = assay)
-#'   }
-#'   
-#'   # avoid small number of cells 
-#'   if (!is.null(empty_droplets_tbl)) {
-#'     input_read_RNA_assay_transform <- input_read_RNA_assay_transform |>
-#'       left_join(empty_droplets_tbl, by = ".cell") |>
-#'       dplyr::filter(!empty_droplet)
-#'   } 
-#'   
-#'   if (!is.null(alive_identification_tbl)) {
-#'     input_read_RNA_assay_transform =
-#'       input_read_RNA_assay_transform |>
-#'       left_join(
-#'         alive_identification_tbl ,
-#'         by=".cell"
-#'       ) 
-#'   }
+#' Calculate Metacell Membership Scores Across Different Gamma Parameters
+#'
+#' This function processes single-cell data to identify metacell membership across various gamma settings. 
+#' It preprocesses the single-cell data, calculates gamma values based on the number of columns (typically genes), 
+#' and postprocesses each gamma setting to assign cells to metacells. It then aggregates these results and 
+#' handles missing values by taking the maximum value in each group, ignoring NAs.
+#'
+#' @param sample_sce a SingleCellExperiment object containing pre-loaded single-cell RNA-seq data.
 #' 
-#'   if(!is.null(cell_cycle_score_tbl)) 
-#'     input_read_RNA_assay_transform = input_read_RNA_assay_transform |>
-#'     
-#'     left_join(
-#'       cell_cycle_score_tbl ,
-#'       by=".cell"
-#'     )
-#'   
-#'   
-#'   # Normalise RNA
-#'   # (To Do: Let users decide the normalisation factors OR supercell factors by ellipsis)
-#'   normalized_rna <- 
-#'     input_read_RNA_assay |> 
-#'     NormalizeData(normalization.method = "LogNormalize") |> 
-#'     FindVariableFeatures(nfeatures = 2000) |>
-#'     ScaleData() |>
-#'     RunPCA(npcs = 50, verbose = F) |> 
-#'     RunUMAP(reduction = "pca", dims = c(1:30), n.neighbors = 30, verbose = F)
-#'   
-#'   
-#'   MC <- SuperCell::SCimplify(Seurat::GetAssayData(normalized_rna, slot = "data"),  # single-cell log-normalized gene expression data
-#'                              k.knn = k_knn,
-#'                              gamma = gamma,
-#'                              n.var.genes = nb_var_genes,  
-#'                              n.pc = nb_pc,
-#'                              genes.use = Seurat::VariableFeatures(normalized_rna)
-#'   )
-#'   
-#'   # MC.GE <- supercell_GE(Seurat::GetAssayData(normalized_rna, slot = "counts"),
-#'   #                       MC$membership,
-#'   #                       mode =  "sum")
-#'   # 
-#'   # # Construct the object using metacell
-#'   # colnames(MC.GE) <- as.character(1:ncol(MC.GE))
-#'   # MC.seurat <- CreateSeuratObject(counts = MC.GE, 
-#'   #                                 meta.data = data.frame(size = as.vector(table(MC$membership)))
-#'   #                                 )
-#'   # MC.seurat[[annotation_label]] <- MC$annotation
-#'   # 
-#'   # # save single-cell membership to metacells in the MC.seurat object
-#'   # MC.seurat@misc$cell_membership <- data.frame(row.names = names(MC$membership), membership = MC$membership)
-#'   # MC.seurat@misc$var_features <- MC$genes.use 
-#'   # 
-#'   # # Save the PCA components and genes used in SCimplify  
-#'   # PCA.res <- irlba::irlba(scale(Matrix::t(se.data@assays$RNA@data[MC$genes.use, ])), nv = nb_pc)
-#'   # pca.x <- PCA.res$u %*% diag(PCA.res$d)
-#'   # rownames(pca.x) <- colnames(se.data@assays$RNA@data)
-#'   # MC.seurat@misc$sc.pca <- CreateDimReducObject(
-#'   #   embeddings = pca.x,
-#'   #   loadings = PCA.res$v,
-#'   #   key = "PC_",
-#'   #   assay = "RNA"
-#'   # )
-#'   # 
-#'   # MC.seurat[["RNA"]] <- as(object = MC.seurat[["RNA"]], Class = "Assay")
-#'   
-#'   # Return a tibble showing which cell belongs to which metacell cluster
-#'   metacell_classification <- tibble(cell = MC$membership |> names(), 
-#'                                     membership = MC$membership)
-#'   
-#'   metacell_classification
-#'   
-#' }
+#' @return A tibble with metacells membership scores across computed gamma settings.
+#' @importFrom purrr map
+#' @importFrom dplyr rename group_by summarise group_split
+#' @examples
+#' # Assume 'sce' is a SingleCellExperiment object with a cell type
+#' calculate_metacell(sce)
+calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce) {
+  # Preprocess the single-cell data
+  preprocessed_sce = sample_sce |> preprocess_SCimplify()
+  
+  # Calculate the number of metacells can be produced
+  gammas <- calculate_gamma(sample_sce |> colnames() |> length())
+  
+  # Postprocess data for each gamma, rename columns, and aggregate results
+  gammas |> map(~ postprocess_SCimplify(preprocessed_sce, gamma = .x) |> 
+                         dplyr::rename(!!paste0("gamma", .x) :=  membership)) |> 
+    bind_rows() |> 
+    
+    # Group by cell and summarise by taking the max value across all variables, removing NAs
+    group_by(cell) |>
+    summarise(across(everything(), max, na.rm = TRUE))
+}
 
+#' Calculate Metacell Membership for Each Cell Type
+#'
+#' This function processes a SingleCellExperiment object by grouping cells according
+#' to their type, calculates metacell membership for each group, and combines the
+#' results into a single tibble.
+#'
+#' @param sample_sce A SingleCellExperiment object containing single-cell data.
+#' @param cell_type The variable from the colData of `sample_sce` used to group cells by type.
+#'
+#' @return A tibble with metacell membership data for each cell type.
+#' @export
+split_sample_cell_type_calculate_metacell_membership <- function(sample_sce, 
+                                                                 cell_type) {
+  metacell_gamma_membership_tibble <- sample_sce |> dplyr::group_split(!!cell_type) |> 
+    purrr::map(calculate_metacell_for_a_sample_per_cell_type) |> 
+    bind_rows()
+  
+  metacell_gamma_membership_tibble
+}
 
 #' Preprocessing Output
 #'
