@@ -12,6 +12,7 @@ input_seurat_abc =
   as.Seurat(data = NULL) |>
   subset(subset = Tissue %in% c("Blood")) 
 
+cell_type_column <- "Cell_type_in_each_tissue"
 # sample_column<- "Tissue"
 ## Defining functions 
 # 
@@ -52,6 +53,15 @@ preprocessing_output_S = HPCell:::preprocessing_output(tissue,
                                               cell_cycle_score_tbl,
                                               annotation_label_transfer_tbl,
                                               doublet_identification_tbl)
+
+# Calculate metacell for a sample cell type
+metacell_per_cell_type <- HPCell:::calculate_metacell_for_a_sample_per_cell_type(input_seurat_abc)
+
+# Calculate metacell membership
+metacell_tbl <- split_sample_cell_type_calculate_metacell_membership(input_seurat_abc, 
+                                                                     cell_type_column)
+
+#
 # empty_droplets_tbl = HPCell:::empty_droplet_id(input_seurat_list[[1]], filter_empty_droplets = TRUE)
 # 
 # # Define output from annotation_label_transfer 
