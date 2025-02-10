@@ -1594,8 +1594,9 @@ preprocessing_output <- function(input_read_RNA_assay,
                                  non_batch_variation_removal_S = NULL, 
                                  alive_identification_tbl = NULL, 
                                  cell_cycle_score_tbl = NULL, 
+                                 cell_type_ensembl_harmonised_tbl = NULL,
                                  annotation_label_transfer_tbl = NULL, 
-                                 doublet_identification_tbl){
+                                 doublet_identification_tbl = NULL){
   #Fix GCHECKS 
   .cell <- NULL
   alive <- NULL
@@ -1656,7 +1657,8 @@ preprocessing_output <- function(input_read_RNA_assay,
   try({
       if (inherits(annotation_label_transfer_tbl, "tbl_df")){
         input_read_RNA_assay <- input_read_RNA_assay |>
-          left_join(annotation_label_transfer_tbl, by = ".cell")
+          left_join(annotation_label_transfer_tbl, by = ".cell") |>
+          left_join(cell_type_ensembl_harmonised_tbl)
       }
     }, silent = TRUE)
   
@@ -1683,6 +1685,7 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @param x A grouping variable used to aggregate cells into pseudobulk samples.
 #' This variable should be present in the `preprocessing_output_S` object and 
 #' typically represents a factor such as sample ID or condition.
+#' @param container_type A character vector specifying the output file type. Ideally it should match to the input file type.
 #' @param ... Additional arguments passed to internal functions used within 
 #' `create_pseudobulk`. This includes parameters for customization of 
 #' aggregation, data transformation, or any other process involved in the 
@@ -1708,6 +1711,7 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @importFrom SummarizedExperiment rowData
 #' @importFrom digest digest
 #' @importFrom HDF5Array saveHDF5SummarizedExperiment
+#' @importFrom SingleCellExperiment SingleCellExperiment
 #' 
 #' @export
 
@@ -1718,9 +1722,11 @@ create_pseudobulk <- function(input_read_RNA_assay,
                               alive_identification_tbl = NULL,
                               cell_cycle_score_tbl = NULL,
                               annotation_label_transfer_tbl = NULL,
+                              cell_type_ensembl_harmonised_tbl = NULL,
                               doublet_identification_tbl = NULL,  
                               x = c() , 
-                              external_path, assays = NULL) {
+                              external_path, assays = NULL,
+                              container_type) {
   #Fix GChecks 
   .sample = NULL 
   .feature = NULL 
@@ -1734,10 +1740,11 @@ create_pseudobulk <- function(input_read_RNA_assay,
       input_read_RNA_assay,
       empty_droplets_tbl,
       non_batch_variation_removal_S = NULL, 
-      alive_identification_tbl, 
-      cell_cycle_score_tbl, 
+      alive_identification_tbl = NULL,
+      cell_cycle_score_tbl = NULL,
+      cell_type_ensembl_harmonised_tbl,
       annotation_label_transfer_tbl, 
-      doublet_identification_tbl
+      doublet_identification_tbl = NULL
     )
   
   
@@ -1766,6 +1773,7 @@ create_pseudobulk <- function(input_read_RNA_assay,
     as_SummarizedExperiment(.sample, .feature, any_of(assays)) 
   
   rowData(pseudobulk)$feature_name = rownames(pseudobulk)
+  colData(pseudobulk)$pseudobulk_sample = colnames(pseudobulk)
   
   pseudobulk = pseudobulk |>
     pivot_longer(cols = assays, names_to = "data_source", values_to = "count") |>
@@ -1777,19 +1785,31 @@ create_pseudobulk <- function(input_read_RNA_assay,
     mutate(data_source = stringr::str_remove(data_source, "abundance_")) |>
     unite(".feature", c(symbol, data_source), remove = FALSE) |>
     
-    # Covert
     as_SummarizedExperiment(
       .sample = .sample,
       .transcript = .feature,
       .abundance = count
     ) 
   
+  # Covert pseudobulk to SCE representation as zellkonverter::writeH5AD 
+  #  does not support saving a SummarizedExperiment
+  if (container_type == "anndata") {
+    pseudobulk = SingleCellExperiment(
+      assays = assays(pseudobulk),
+      rowData = rowData(pseudobulk),
+      colData = colData(pseudobulk)
+    )
+  }
+
   file_name = glue("{external_path}/{digest(pseudobulk)}")
   
   pseudobulk |>
     
-    # Conver to H5
-    saveHDF5SummarizedExperiment(dir = file_name, replace=TRUE, as.sparse=TRUE)
+    # Convert to Anndata
+    save_experiment_data(
+      dir = file_name, 
+      container_type = container_type
+    )
   
 }
 
