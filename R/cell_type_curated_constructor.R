@@ -57,6 +57,13 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
                                          annotation_label_transfer_tbl = NULL, 
                                          celltype_unification_maps = NULL, 
                                          nonimmune = NULL) {
+  
+  # Handle missing input
+  if (input_read_RNA_assay |> is.null()) return(NULL)
+  
+  # Handle empty annotation_tbl
+  if (nrow(annotation_label_transfer_tbl) == 0 ) return(NULL)
+  
   # Use pre-generated celltype_unification_maps (list) and 
   #   nonimmune_cellxgene (character vector) from Dharmesh
   if (is.null(celltype_unification_maps)) 
@@ -73,13 +80,18 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
   }, silent = TRUE)
   
   # Rename and unnest annotation_tbl
-  input_read_RNA_assay <- input_read_RNA_assay |>  colData() |> as.data.frame() |> 
+  input_read_RNA_assay <- input_read_RNA_assay |>  SummarizedExperiment::colData() |> as.data.frame() |> 
     rownames_to_column(var = ".cell") |> 
     dplyr::rename(
       blueprint_first_labels_fine = blueprint_first.labels.fine, 
-      monaco_first_labels_fine = monaco_first.labels.fine, 
-      azimuth_predicted_celltype_l2 = azimuth_predicted.celltype.l2
-    )  |>
+      monaco_first_labels_fine = monaco_first.labels.fine
+    ) 
+  
+  # Sometimes, sce does not have azimuth annotation
+  input_read_RNA_assay <- input_read_RNA_assay |> 
+    mutate(azimuth_predicted_celltype_l2 = ifelse(!("azimuth_predicted.celltype.l2" %in% names(input_read_RNA_assay)),
+                                                  NA, 
+                                                  azimuth_predicted.celltype.l2)) |>
     unnest(blueprint_scores_fine) |> 
     select(.cell, observation_joinid,
            observation_originalid,

@@ -2951,3 +2951,16 @@ check_if_assay_minimum_count_is_zero_and_correct_TEMPORARY <- function(input_rea
   # Return the modified object
   return(input_read_RNA_assay)
 }
+
+#' Clean Metadata in SingleCellExperiment Object
+#'
+#' This function takes a SingleCellExperiment (SCE) object and removes columns 
+#'    that are completely filled with NA values.
+#' The cleaned metadata is then returned as a dataframe.
+#'
+#' @param sce A SingleCellExperiment object containing metadata to be cleaned.
+#' @return A SingleCellExperiment with all completely NA columns removed
+clean_sce_metadata <- function(sce) {
+  sce <- sce |> select(where(~ any(!is.na(.))))
+  sce
+}
