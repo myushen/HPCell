@@ -18,7 +18,7 @@ transform_utility(
 
 \item{external_path}{A character string specifying the directory path to save the transformed object.}
 
-\item{data_container_type}{A character vector specifying the output file type. Ideally it should match to the input file type.}
+\item{container_type}{A character vector specifying the output file type. Ideally it should match to the input file type.}
 }
 \value{
 The function does not return an object. It saves the transformed SummarizedExperiment object to the specified path.

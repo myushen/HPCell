@@ -52,7 +52,7 @@ transform_assay.HPCell = function(
 #' @param input_read_RNA_assay A SummarizedExperiment object to be transformed.
 #' @param transform_fx A function to apply to the assay of the SummarizedExperiment object.
 #' @param external_path A character string specifying the directory path to save the transformed object.
-#' @param data_container_type A character vector specifying the output file type. Ideally it should match to the input file type.
+#' @param container_type A character vector specifying the output file type. Ideally it should match to the input file type.
 #' @return The function does not return an object. It saves the transformed SummarizedExperiment object to the specified path.
 #'
 #' @importFrom SummarizedExperiment assay
@@ -146,6 +146,7 @@ transform_utility  = function(input_read_RNA_assay, transform_fx, external_path,
   # Subtract the mode value from counts if it is not zero
   if (majority_gene_counts != 0) {
     counts <- counts - majority_gene_counts
+    counts_light_for_checks <- counts_light_for_checks - majority_gene_counts
   }
   
   # Replace negative counts with zero to avoid downstream failures
