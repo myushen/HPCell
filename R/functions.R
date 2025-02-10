@@ -1656,10 +1656,27 @@ preprocessing_output <- function(input_read_RNA_assay,
   
   # Attach annotation
   try({
-      if (inherits(annotation_label_transfer_tbl, "tbl_df")){
+      if (inherits(annotation_label_transfer_tbl, "tbl_df") && nrow(annotation_label_transfer_tbl) > 0){
         input_read_RNA_assay <- input_read_RNA_assay |>
           left_join(annotation_label_transfer_tbl, by = ".cell") |>
           left_join(cell_type_ensembl_harmonised_tbl)
+        
+        # Replace NA annotation column with "other", as annotations are single-cell level, not related to pseudobulk
+        annotation_columns <- c("blueprint_first.labels.fine",  "blueprint_first.labels.coarse",
+                                "monaco_first.labels.fine", "monaco_first.labels.coarse", 
+                                "blueprint_first_labels_fine", "monaco_first_labels_fine", 
+                                "azimuth_predicted_celltype_l2", "azimuth", "blueprint", "monaco")
+        
+        cell_type_concensus_columns <- c("cell_type_unified_ensemble", "data_driven_ensemble")
+        
+        input_read_RNA_assay <- input_read_RNA_assay |> mutate(across(all_of(annotation_columns), 
+                                                                      ~tidyr::replace_na(., "Other"))) |> 
+          
+          mutate(across(all_of(cell_type_concensus_columns), as.character)) |>
+          
+          # Replace NA with Unknown because non-immune cells are regarded as "Other" in cell_type_unified_ensemble
+          mutate(across(all_of(cell_type_concensus_columns), 
+                        ~tidyr::replace_na(., "Unknown")))
       }
     }, silent = TRUE)
   
@@ -1709,7 +1726,7 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @importFrom S4Vectors cbind
 #' @importFrom purrr map
 #' @importFrom scater isOutlier
-#' @importFrom SummarizedExperiment rowData
+#' @importFrom SummarizedExperiment rowData colData rowData<- colData<-
 #' @importFrom digest digest
 #' @importFrom HDF5Array saveHDF5SummarizedExperiment
 #' @importFrom SingleCellExperiment SingleCellExperiment
@@ -1736,6 +1753,8 @@ create_pseudobulk <- function(input_read_RNA_assay,
   
   dir.create(external_path, showWarnings = FALSE, recursive = TRUE)
   
+  if (input_read_RNA_assay |> is.null()) return(NULL)
+  
   preprocessing_output_S = 
     preprocessing_output(
       input_read_RNA_assay,
@@ -1748,6 +1767,8 @@ create_pseudobulk <- function(input_read_RNA_assay,
       doublet_identification_tbl = NULL
     )
   
+  # In rare cases, empty droplets observed across cells in a sample
+  if (ncol(preprocessing_output_S) == 0) return(NULL)
   
   if(assays |> is.null()){
     if(preprocessing_output_S |> is("Seurat"))
@@ -1771,7 +1792,7 @@ create_pseudobulk <- function(input_read_RNA_assay,
   # If I start from Seurat
   if(pseudobulk |> is("data.frame"))
     pseudobulk = pseudobulk |>
-    as_SummarizedExperiment(.sample, .feature, any_of(assays)) 
+    tidybulk::as_SummarizedExperiment(.sample, .feature, any_of(assays)) 
   
   rowData(pseudobulk)$feature_name = rownames(pseudobulk)
   colData(pseudobulk)$pseudobulk_sample = colnames(pseudobulk)
@@ -1782,11 +1803,11 @@ create_pseudobulk <- function(input_read_RNA_assay,
     
     # Some manipulation to get unique feature because RNA and ADT
     # both can have same name genes
-    rename(symbol = .feature) |>
+    dplyr::rename(symbol = .feature) |>
     mutate(data_source = stringr::str_remove(data_source, "abundance_")) |>
-    unite(".feature", c(symbol, data_source), remove = FALSE) |>
+    tidyr::unite(".feature", c(symbol, data_source), remove = FALSE) |>
     
-    as_SummarizedExperiment(
+    tidybulk::as_SummarizedExperiment(
       .sample = .sample,
       .transcript = .feature,
       .abundance = count
@@ -1802,8 +1823,9 @@ create_pseudobulk <- function(input_read_RNA_assay,
     )
   }
 
-  file_name = glue("{external_path}/{digest(pseudobulk)}")
+  file_name = glue::glue("{external_path}/{digest(pseudobulk)}")
   
+  # Maybe do not need to save Anndata externally for cellNexus because pseudobulk can be read by tar_read_raw
   pseudobulk |>
     
     # Convert to Anndata

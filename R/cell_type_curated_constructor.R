@@ -3,6 +3,7 @@
 celltype_consensus_constructor <- function(input_hpc, 
                                          target_input = "sce_transformed", 
                                          target_output = "cell_type_concensus_tbl", 
+                                         target_annotation = "annotation_tbl",
                                          celltype_unification_list = NULL,
                                          nonimmune_cellxgene = NULL,
                                          ...) {
@@ -15,6 +16,7 @@ celltype_consensus_constructor <- function(input_hpc,
 celltype_consensus_constructor.HPCell <- function(input_hpc, 
                                                 target_input = "sce_transformed", 
                                                 target_output = "cell_type_concensus_tbl",
+                                                target_annotation = "annotation_tbl",
                                                 ...) {
   
   input_hpc |> 
@@ -23,26 +25,9 @@ celltype_consensus_constructor.HPCell <- function(input_hpc,
       target_output = target_output, 
       user_function = cell_type_ensembl_harmonised |> quote(),
       input_read_RNA_assay = target_input |> is_target(), 
-      annotation_label_transfer_tbl = "annotation_tbl" |> is_target(),
+      annotation_label_transfer_tbl = target_annotation |> is_target(),
       ...
     )
-    
-  # # aggregate each
-  # hpc_iterate(
-  #   target_output = pseudobulk_sample, 
-  #   user_function = create_pseudobulk |> quote() , 
-  #   input_read_RNA_assay = target_input |> is_target(), 
-  #   sample_names_vec = "sample_names" |> is_target(),
-  #   empty_droplets_tbl = "empty_tbl" |> is_target() ,
-  #   alive_identification_tbl = "alive_tbl" |> is_target(),
-  #   cell_cycle_score_tbl = "cell_cycle_tbl" |> is_target(),
-  #   annotation_label_transfer_tbl = "annotation_tbl" |> is_target(),
-  #   doublet_identification_tbl = "doublet_tbl" |> is_target(),
-  #   x = group_by,
-  #   external_path = glue("{input_hpc$initialisation$store}/external"),
-  #   container_type = data_container_type
-  # ) 
-  # 
 }
 
 #' Harmonize Cell Types Across Datasets
@@ -72,6 +57,13 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
                                          annotation_label_transfer_tbl = NULL, 
                                          celltype_unification_maps = NULL, 
                                          nonimmune = NULL) {
+  
+  # Handle missing input
+  if (input_read_RNA_assay |> is.null()) return(NULL)
+  
+  # Handle empty annotation_tbl
+  if (nrow(annotation_label_transfer_tbl) == 0 ) return(NULL)
+  
   # Use pre-generated celltype_unification_maps (list) and 
   #   nonimmune_cellxgene (character vector) from Dharmesh
   if (is.null(celltype_unification_maps)) 
@@ -88,13 +80,18 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
   }, silent = TRUE)
   
   # Rename and unnest annotation_tbl
-  input_read_RNA_assay <- input_read_RNA_assay |>  colData() |> as.data.frame() |> 
+  input_read_RNA_assay <- input_read_RNA_assay |>  SummarizedExperiment::colData() |> as.data.frame() |> 
     rownames_to_column(var = ".cell") |> 
     dplyr::rename(
       blueprint_first_labels_fine = blueprint_first.labels.fine, 
-      monaco_first_labels_fine = monaco_first.labels.fine, 
-      azimuth_predicted_celltype_l2 = azimuth_predicted.celltype.l2
-    )  |>
+      monaco_first_labels_fine = monaco_first.labels.fine
+    ) 
+  
+  # Sometimes, sce does not have azimuth annotation
+  input_read_RNA_assay <- input_read_RNA_assay |> 
+    mutate(azimuth_predicted_celltype_l2 = ifelse(!("azimuth_predicted.celltype.l2" %in% names(input_read_RNA_assay)),
+                                                  NA, 
+                                                  azimuth_predicted.celltype.l2)) |>
     unnest(blueprint_scores_fine) |> 
     select(.cell, observation_joinid,
            observation_originalid,
