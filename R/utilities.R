@@ -58,6 +58,7 @@ read_data_container <- function(file,
 #' @param container_type A character vector of length one specifies the input data type.
 #' @return An object stored in the defined path.
 #' @importFrom HDF5Array loadHDF5SummarizedExperiment saveHDF5SummarizedExperiment
+#' @importFrom SummarizedExperiment assay
 #' @export
 save_experiment_data <- function(data,
                                  dir,
@@ -77,6 +78,7 @@ save_experiment_data <- function(data,
   
   switch(container_type,
          "anndata" = {
+           if (ncol(assay(data)) == 1) data = data |> duplicate_single_column_assay()
            zellkonverter::writeH5AD(data, paste0(dir, ".h5ad"), compression = "gzip") 
            read_data_container(paste0(dir, ".h5ad"), "anndata")
          },
@@ -91,6 +93,42 @@ save_experiment_data <- function(data,
                                                 paste0(dir, ".h5Seurat"),
                                                 overwrite = TRUE)
   )
+}
+
+#' Duplicate Single-Column Assay in SingleCellExperiment Object
+#'
+#' This function handles SingleCellExperiment (SCE) objects where a specified assay 
+#' contains only one column. It duplicates the single-column assay to avoid potential 
+#' errors during saving or downstream analysis that require at least two columns. 
+#' The duplicated column is marked with a prefix `DUMMY___` to distinguish it. 
+#' Corresponding entries in the column metadata (`colData`) are also duplicated.
+#'
+#' @param sce A `SingleCellExperiment` object.
+#' @importFrom SummarizedExperiment assay assays colData
+#' @importFrom SingleCellExperiment SingleCellExperiment
+#' @importFrom rlang set_names
+#' @return A modified `SingleCellExperiment` object with the single-column assay 
+#' duplicated if applicable. If the assay already has more than one column, the 
+#' function returns the original object unchanged.
+duplicate_single_column_assay <- function(sce) {
+  
+  assay_name = sce |> assays() |> names() |> magrittr::extract2(1)
+  
+  if(ncol(assay(sce)) == 1) {
+    
+    # Duplicate the assay to prevent saving errors due to single-column matrices
+    my_assay = cbind(assay(sce), assay(sce))
+    # Rename the second column to distinguish it
+    colnames(my_assay)[2] = paste0("DUMMY", "___", colnames(my_assay)[2])
+    
+    cd = colData(sce)
+    cd = cd |> rbind(cd)
+    rownames(cd)[2] = paste0("DUMMY", "___", rownames(cd)[2])
+    
+    sce =  SingleCellExperiment(assay = list(my_assay) |> set_names(assay_name), colData = cd)
+    sce
+  } 
+  sce
 }
 
 #' Gene name conversion using ensembl database
@@ -808,7 +846,6 @@ is_strong_evidence = function(single_cell_data, cell_annotation_azimuth_l2, cell
 #'
 #' This function takes cell type annotations from multiple datasets (Azimuth, Monaco, Blueprint) and harmonizes them into a consensus annotation. The function utilizes predefined mappings between cell type labels in these datasets to generate standardized cell types across references.
 #'
-#' @importFrom dplyr %>%
 #' @importFrom dplyr mutate
 #' @importFrom dplyr case_when
 #' @importFrom dplyr left_join
@@ -825,12 +862,12 @@ is_strong_evidence = function(single_cell_data, cell_annotation_azimuth_l2, cell
 #'
 #' @examples
 #' # Example usage:
-#' tibble(
+#' tibble::tibble(
 #'   azimuth_predicted.celltype.l2 = c("CD8 TEM", "NK", "CD4 Naive"),
 #'   monaco_first.labels.fine = c("Effector memory CD8 T cells", "Natural killer cells", "Naive CD4 T cells"),
 #'   blueprint_first.labels.fine = c("CD8+ Tem", "NK cells", "Naive B-cells")
-#' ) %>%
-#'   mutate(consensus = reference_annotation_to_consensus(
+#' ) |>
+#'   dplyr::mutate(consensus = reference_annotation_to_consensus(
 #'     azimuth_predicted.celltype.l2, monaco_first.labels.fine, blueprint_first.labels.fine))
 #' 
 #' @note This function is designed to harmonize specific cell types, especially T cells, B cells, monocytic cells, and innate lymphoid cells (ILCs), across reference datasets.
@@ -2321,10 +2358,7 @@ add_tier_inputs <- function(command, arguments_to_tier, i) {
 #' @param chunk_size The size of each chunk. Defaults to 100.
 #' @return A tibble with the features and their corresponding chunk numbers.
 #' @importFrom dplyr tibble
-#' @importFrom purrr rep_along
-#' @importFrom purrr ceiling
-#' @importFrom purrr seq_len
-#' @importFrom purrr length
+#' @importFrom rlang rep_along
 #' @importFrom magrittr divide_by
 #' 
 #' 
@@ -2649,7 +2683,6 @@ check_for_name_value_conflicts <- function(...) {
 #' # $packages
 #' # [1] "tidySummarizedExperiment" "HPCell"
 #' 
-#' @importFrom stats substitute
 #' @noRd
 expand_tiered_arguments <- function(lst, tiers, argument_to_replace, tiered_args) {
   # Check if the argument to replace exists in the list
@@ -2767,7 +2800,6 @@ write_HDF5_array_safe = function(normalized_rna, name, directory){
 #' @import DelayedArray
 #' @importFrom DelayedArray blockApply
 #' @importFrom methods as
-#' @importFrom stats as.numeric
 #' @importFrom utils capture.output
 #'
 #' @examples
