@@ -384,6 +384,29 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
 
 # Define the generic function
 #' @export
+cluster_metacell <- function(input_hpc, target_input = "data_object", 
+                             target_celltype_ensembl = "cell_type_concensus_tbl",
+                             target_output = "metacell_tbl", ...) {
+  UseMethod("cluster_metacell")
+}
+
+#' @export
+cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object", 
+                                   target_celltype_ensembl = "cell_type_concensus_tbl",
+                                   target_output = "metacell_tbl", ...) {
+  
+  input_hpc |> 
+    hpc_iterate(
+      target_output = target_output, 
+      user_function = split_sample_cell_type_calculate_metacell_membership |> quote() , 
+      sample_sce = target_input |> is_target(), 
+      cell_type = target_celltype_ensembl |> is_target(),
+      ...
+    )
+}
+
+# Define the generic function
+#' @export
 calculate_pseudobulk <- function(input_hpc, group_by = NULL, target_input = "data_object", target_output = "pseudobulk_se") {
   UseMethod("calculate_pseudobulk")
 }
