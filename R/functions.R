@@ -1157,8 +1157,9 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
     NormalizeData(normalization.method = "LogNormalize") |> 
     FindVariableFeatures(nfeatures = 2000) |>
     ScaleData() |>
-    RunPCA(npcs = 50, verbose = F) |> 
-    RunUMAP(reduction = "pca", dims = c(1:30), n.neighbors = 30, verbose = F) |> 
+    RunPCA(npcs = min(50, ncol(input_read_RNA_assay) - 1), verbose = F) |> 
+    RunUMAP(reduction = "pca", dims = c(1:min(30, ncol(input_read_RNA_assay) - 1)), 
+            n.neighbors = min(30, ncol(input_read_RNA_assay) - 1), verbose = F) |> 
     Seurat::GetAssayData(slot = "data")
   
   N.c <- ncol(normalized_rna)
@@ -1549,14 +1550,18 @@ calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce) {
 #' results into a single tibble.
 #'
 #' @param sample_sce A SingleCellExperiment object containing single-cell data.
-#' @param cell_type The variable from the colData of `sample_sce` used to group cells by type.
+#' @param cell_type_concensus_tbl A tibble of cell type.
 #'
 #' @return A tibble with metacell membership data for each cell type.
 #' @export
 split_sample_cell_type_calculate_metacell_membership <- function(sample_sce, 
-                                                                 cell_type) {
-  metacell_gamma_membership_tibble <- sample_sce |> dplyr::group_split(!!cell_type) |> 
-    purrr::map(calculate_metacell_for_a_sample_per_cell_type) |> 
+                                                                 cell_type_concensus_tbl,
+                                                                 x="cell_type") {
+  metacell_gamma_membership_tibble <- sample_sce |> left_join(cell_type_concensus_tbl) |> 
+    dplyr::group_split(!!sym(x)) |>
+    # Calculate metacell only if sample cell_count >=60 as starting from gamma2. 
+    # For sample cell_count less than 30 after splitting, it's not meaningful to construct metacell. 
+    purrr::map( ~ if (ncol(.x) >= 60) {calculate_metacell_for_a_sample_per_cell_type(.x)} else return(NULL)) |> 
     bind_rows()
   
   metacell_gamma_membership_tibble

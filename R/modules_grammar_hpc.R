@@ -386,14 +386,15 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
 #' @export
 cluster_metacell <- function(input_hpc, target_input = "data_object", 
                              target_celltype_ensembl = "cell_type_concensus_tbl",
-                             target_output = "metacell_tbl", ...) {
+                             target_output = "metacell_tbl", group_by = NULL, ...) {
   UseMethod("cluster_metacell")
 }
 
 #' @export
 cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object", 
                                    target_celltype_ensembl = "cell_type_concensus_tbl",
-                                   target_output = "metacell_tbl", ...) {
+                                   target_output = "metacell_tbl", 
+                                   group_by = NULL, ...) {
   
   input_hpc |> 
     hpc_iterate(
@@ -401,6 +402,7 @@ cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object",
       user_function = split_sample_cell_type_calculate_metacell_membership |> quote() , 
       sample_sce = target_input |> is_target(), 
       cell_type = target_celltype_ensembl |> is_target(),
+      x = group_by,
       ...
     )
 }

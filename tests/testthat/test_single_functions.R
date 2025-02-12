@@ -59,6 +59,9 @@ metacell_per_cell_type <- HPCell:::calculate_metacell_for_a_sample_per_cell_type
 
 # Calculate metacell membership
 metacell_tbl <- split_sample_cell_type_calculate_metacell_membership(input_seurat_abc, 
+                                                                     input_seurat_abc[[]] |> 
+                                                                       rownames_to_column(var = ".cell") |> 
+                                                                       as_tibble(),
                                                                      cell_type_column)
 
 #

@@ -4,12 +4,16 @@
 \alias{split_sample_cell_type_calculate_metacell_membership}
 \title{Calculate Metacell Membership for Each Cell Type}
 \usage{
-split_sample_cell_type_calculate_metacell_membership(sample_sce, cell_type)
+split_sample_cell_type_calculate_metacell_membership(
+  sample_sce,
+  cell_type_concensus_tbl,
+  x = "cell_type"
+)
 }
 \arguments{
 \item{sample_sce}{A SingleCellExperiment object containing single-cell data.}
 
-\item{cell_type}{The variable from the colData of \code{sample_sce} used to group cells by type.}
+\item{cell_type_concensus_tbl}{A tibble of cell type.}
 }
 \value{
 A tibble with metacell membership data for each cell type.
