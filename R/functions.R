@@ -1246,7 +1246,19 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
   }
   
   if(!fast.pca){
-    PCA.presampled          <- stats::prcomp(normalized_rna.for.pca, rank. = max(n.pc), scale. = F, center = F)
+    PCA.presampled <- tryCatch({
+      stats::prcomp(normalized_rna.for.pca, rank. = max(n.pc), scale. = FALSE, center = FALSE)
+    }, error = function(e) {
+      # Print error message
+      cat("Error in PCA computation: ", e$message, "\nUpdating data and retrying...\n")
+      
+      # Update normalized_rna.for.pca to exclude columns with zero variance
+      normalized_rna.for.pca <- normalized_rna.for.pca[, apply(normalized_rna.for.pca, 2, var) != 0]
+      
+      # Rerun PCA on the updated dataset
+      stats::prcomp(normalized_rna.for.pca, rank. = max(n.pc), scale. = FALSE, center = FALSE)
+    })
+   
   } else {
     set.seed(seed)
     PCA.presampled          <- irlba::irlba(normalized_rna.for.pca, nv = max(n.pc, 25))
@@ -1557,6 +1569,11 @@ calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce) {
 split_sample_cell_type_calculate_metacell_membership <- function(sample_sce, 
                                                                  cell_type_concensus_tbl,
                                                                  x="cell_type") {
+  
+  if (sample_sce |> is.null()) return(NULL)
+  
+  if (cell_type_concensus_tbl |> is.null()) return(NULL)
+  
   metacell_gamma_membership_tibble <- sample_sce |> left_join(cell_type_concensus_tbl) |> 
     dplyr::group_split(!!sym(x)) |>
     # Calculate metacell only if sample cell_count >=60 as starting from gamma2. 
