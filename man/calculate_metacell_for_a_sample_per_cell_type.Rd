@@ -4,10 +4,16 @@
 \alias{calculate_metacell_for_a_sample_per_cell_type}
 \title{Calculate Metacell Membership Scores Across Different Gamma Parameters}
 \usage{
-calculate_metacell_for_a_sample_per_cell_type(sample_sce)
+calculate_metacell_for_a_sample_per_cell_type(sample_sce, ...)
 }
 \arguments{
 \item{sample_sce}{a SingleCellExperiment object containing pre-loaded single-cell RNA-seq data.}
+
+\item{...}{
+  Arguments passed on to \code{\link[=calculate_gamma]{calculate_gamma}}
+  \describe{
+    \item{\code{min_cells_per_metacell}}{Integer, the minimum number of cells per metacell. Defaults to 30.}
+  }}
 }
 \value{
 A tibble with metacells membership scores across computed gamma settings.

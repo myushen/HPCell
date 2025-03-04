@@ -55,14 +55,16 @@ preprocessing_output_S = HPCell:::preprocessing_output(tissue,
                                               doublet_identification_tbl)
 
 # Calculate metacell for a sample cell type
-metacell_per_cell_type <- HPCell:::calculate_metacell_for_a_sample_per_cell_type(input_seurat_abc)
+metacell_per_cell_type <- HPCell:::calculate_metacell_for_a_sample_per_cell_type(input_seurat_abc,
+                                                                                 min_cells_per_metacell = 10)
 
 # Calculate metacell membership
 metacell_tbl <- split_sample_cell_type_calculate_metacell_membership(input_seurat_abc, 
                                                                      input_seurat_abc[[]] |> 
                                                                        rownames_to_column(var = ".cell") |> 
                                                                        as_tibble(),
-                                                                     cell_type_column)
+                                                                     cell_type_column,
+                                                                     min_cells_per_metacell = 10)
 
 #
 # empty_droplets_tbl = HPCell:::empty_droplet_id(input_seurat_list[[1]], filter_empty_droplets = TRUE)
