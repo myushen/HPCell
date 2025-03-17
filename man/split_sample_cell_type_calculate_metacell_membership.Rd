@@ -6,22 +6,19 @@
 \usage{
 split_sample_cell_type_calculate_metacell_membership(
   sample_sce,
-  cell_type_concensus_tbl,
+  cell_type_tbl,
   x = "cell_type",
-  min_cells_per_metacell = 30,
-  ...
+  min_cells_per_metacell = 30
 )
 }
 \arguments{
 \item{sample_sce}{A SingleCellExperiment object containing single-cell data.}
 
-\item{cell_type_concensus_tbl}{A tibble of cell type.}
+\item{cell_type_tbl}{A tibble of cell type.}
 
-\item{...}{
-  Arguments passed on to \code{\link[=calculate_gamma]{calculate_gamma}}
-  \describe{
-    \item{\code{min_cells_per_metacell}}{Integer, the minimum number of cells per metacell. Defaults to 30.}
-  }}
+\item{x}{A character vector of cell type aggregation column.}
+
+\item{min_cells_per_metacell}{An integer of minimum cells in each metacell.}
 }
 \value{
 A tibble with metacell membership data for each cell type.

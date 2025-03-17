@@ -63,7 +63,7 @@ metacell_tbl <- split_sample_cell_type_calculate_metacell_membership(input_seura
                                                                      input_seurat_abc[[]] |> 
                                                                        rownames_to_column(var = ".cell") |> 
                                                                        as_tibble(),
-                                                                     cell_type_column,
+                                                                     x = cell_type_column,
                                                                      min_cells_per_metacell = 10)
 
 #

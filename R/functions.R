@@ -1531,7 +1531,7 @@ calculate_gamma <- function(cell_count, min_cells_per_metacell = 30) {
 #' handles missing values by taking the maximum value in each group, ignoring NAs.
 #'
 #' @param sample_sce a SingleCellExperiment object containing pre-loaded single-cell RNA-seq data.
-#' @inheritDotParams calculate_gamma min_cells_per_metacell
+#' @param min_cells_per_metacell An integer of minimum cells in each metacell.
 #' @return A tibble with metacells membership scores across computed gamma settings.
 #' @importFrom purrr map
 #' @importFrom dplyr rename group_by summarise group_split
@@ -1539,13 +1539,13 @@ calculate_gamma <- function(cell_count, min_cells_per_metacell = 30) {
 #' # Assume 'sce' is a SingleCellExperiment object with a cell type
 #' calculate_metacell(sce)
 calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce,
-                                                          ...) {
+                                                          min_cells_per_metacell) {
   # Preprocess the single-cell data
   preprocessed_sce = sample_sce |> preprocess_SCimplify()
   
   # Calculate the number of metacells can be produced
   gammas <- calculate_gamma(sample_sce |> colnames() |> length(),
-                            ...)
+                            min_cells_per_metacell)
   
   # Postprocess data for each gamma, rename columns, and aggregate results
   gammas |> map(~ postprocess_SCimplify(preprocessed_sce, gamma = .x) |> 
@@ -1564,21 +1564,21 @@ calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce,
 #' results into a single tibble.
 #'
 #' @param sample_sce A SingleCellExperiment object containing single-cell data.
-#' @param cell_type_concensus_tbl A tibble of cell type.
-#' @inheritDotParams calculate_gamma min_cells_per_metacell
+#' @param cell_type_tbl A tibble of cell type.
+#' @param x A character vector of cell type aggregation column.
+#' @param min_cells_per_metacell An integer of minimum cells in each metacell.
 #' @return A tibble with metacell membership data for each cell type.
 #' @export
 split_sample_cell_type_calculate_metacell_membership <- function(sample_sce, 
-                                                                 cell_type_concensus_tbl,
+                                                                 cell_type_tbl,
                                                                  x="cell_type",
-                                                                 min_cells_per_metacell = 30,
-                                                                 ...) {
+                                                                 min_cells_per_metacell = 30) {
   
   if (sample_sce |> is.null()) return(NULL)
   
-  if (cell_type_concensus_tbl |> is.null()) return(NULL)
+  if (cell_type_tbl |> is.null()) return(NULL)
   
-  metacell_gamma_membership_tibble <- sample_sce |> left_join(cell_type_concensus_tbl) |> 
+  metacell_gamma_membership_tibble <- sample_sce |> left_join(cell_type_tbl) |> 
     dplyr::group_split(!!sym(x)) |>
     # By deault, calculate metacell only if sample cell_count >=60 as starting from gamma2. In this case,
     #   for sample cell_count less than 30 after splitting, it's not meaningful to construct metacell. 

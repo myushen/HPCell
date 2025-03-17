@@ -405,9 +405,9 @@ cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object",
       target_output = target_output, 
       user_function = split_sample_cell_type_calculate_metacell_membership |> quote() , 
       sample_sce = target_input |> is_target(), 
-      cell_type = target_celltype_ensembl |> is_target(),
+      cell_type_tbl = target_celltype_ensembl |> is_target(),
       x = group_by,
-      cells = cell_per_metacell,
+      min_cells_per_metacell = cell_per_metacell,
       ...
     )
 }
