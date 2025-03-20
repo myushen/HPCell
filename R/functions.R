@@ -611,7 +611,7 @@ alive_identification <- function(input_read_RNA_assay,
   
   
   # Returns a named vector of IDs
-  # Matches the gene id’s row by row and inserts NA when it can’t find gene names
+  # Matches the gene id's row by row and inserts NA when it can't find gene names
   if (feature_nomenclature == "symbol") {
     location <- mapIds(
       EnsDb.Hsapiens.v86,
@@ -1503,12 +1503,23 @@ postprocess_SCimplify <- function(preprocessed,
 
 #' Calculate Appropriate Gamma Values for Metacell Analysis
 #'
-#' This function determines viable gamma values to be used in metacell analysis. It calculates gamma values
-#' by doubling gamma until the quotient of the total cell count and gamma is less than the specified minimum
-#' number of cells per metacell.
+#' This function determines viable gamma (γ) values to be used in metacell analysis. Gamma is a graining level 
+#' parameter that controls the degree of cell aggregation when creating metacells. It represents the ratio 
+#' between the original number of cells and the desired number of metacells.
+#'
+#' For example:
+#' - γ = 2: combines cells to create metacells, aiming for half as many metacells as original cells
+#' - γ = 4: aims for one-fourth as many metacells
+#' - γ = 8: aims for one-eighth as many metacells
+#' And so on, using powers of 2.
+#'
+#' The function starts with γ = 2 and doubles it repeatedly (2, 4, 8, 16...) until the ratio of 
+#' cells/gamma would result in metacells that are smaller than the minimum allowed size. Higher gamma 
+#' values mean more aggressive aggregation (fewer, larger metacells), while lower gamma values preserve 
+#' more granularity (more, smaller metacells).
 #'
 #' @param cell_count Integer, the total number of cells.
-#' @param min_cells_per_metacell Integer, the minimum number of cells per metacell. Defaults to 30.
+#' @param min_cells_per_metacell Integer, the minimum number of cells allowed per metacell. Defaults to 30.
 #' @return An Integer vector of viable gamma values. If no viable gamma values are found, returns 0.
 calculate_gamma <- function(cell_count, min_cells_per_metacell = 30) {
   gamma = 2
