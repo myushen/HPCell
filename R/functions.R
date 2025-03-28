@@ -529,7 +529,8 @@ annotation_label_transfer <- function(input_read_RNA_assay,
 #' @param assay The assay to be used for analysis, specified as a character string. 
 #' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
 #' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param annotation_label_transfer_tbl A tibble with annotation label transfer data.
+#' @param cell_type_ensembl_harmonised_tbl A tibble with annotated cell type label data.
+#' @param cell_type_column A character vector indicating the cell type column used for grouping during quality control and dead cell removal.
 #' @param assay assay used, default = "RNA" 
 #'
 #' @return A tibble identifying alive cells.
@@ -556,8 +557,8 @@ annotation_label_transfer <- function(input_read_RNA_assay,
 #' @export
 alive_identification <- function(input_read_RNA_assay,
                                  empty_droplets_tbl = NULL,
-                                 annotation_label_transfer_tbl = NULL,
-                                 annotation_column = NULL,
+                                 cell_type_ensembl_harmonised_tbl = NULL,
+                                 cell_type_column = NULL,
                                  assay = NULL,
                                  feature_nomenclature) {
   
@@ -567,9 +568,11 @@ alive_identification <- function(input_read_RNA_assay,
   .cell = NULL 
   high_mitochondrion = NULL 
   
+  if (input_read_RNA_assay |> is.null()) return(NULL)
+  
   if(
-    !is.null(annotation_column) && 
-    !annotation_column %in% colnames(as_tibble(input_read_RNA_assay[1,1]))
+    is.null(cell_type_column) && 
+    !cell_type_column %in% colnames(as_tibble(input_read_RNA_assay[1,1]))
   )
     stop("HPCell says: Your `group_by` columns are not present in your data. Please run annotate_cell_type_hpc() to get the cell type annotation that you can use as grouping for the cell-type-specific quality control and removal of dead cells.")
   
@@ -582,6 +585,12 @@ alive_identification <- function(input_read_RNA_assay,
       left_join(empty_droplets_tbl, by=".cell") |>
       dplyr::filter(!empty_droplet)
   } 
+  
+  # In rare cases, all cells in a sample are empty droplets
+  if (ncol(input_read_RNA_assay) == 0) return(NULL)
+  
+  # In rare cases, a cell in a sample is non empty droplet
+  if (ncol(input_read_RNA_assay) == 1) input_read_RNA_assay = input_read_RNA_assay |> duplicate_single_column_assay()
   
   # Calculate nFeature_RNA and nCount_RNA if not exist in the data
   nFeature_name <- paste0("nFeature_", assay)
@@ -634,13 +643,13 @@ alive_identification <- function(input_read_RNA_assay,
   #   as_tibble(rownames = ".cell") |>
   #   select(-sum, -detected) |>
   # 
-  #   # Join cell types if annotation_label_transfer_tbl provided
+  #   # Join cell types if cell_type_ensembl_harmonised_tbl provided
   #   {\(x)
-  #     if (inherits(annotation_label_transfer_tbl, "tbl_df")) {
-  #       left_join(x, annotation_label_transfer_tbl, by = ".cell") |>
+  #     if (inherits(cell_type_ensembl_harmonised_tbl, "tbl_df")) {
+  #       left_join(x, cell_type_ensembl_harmonised_tbl, by = ".cell") |>
   # 
   #       # Label cells
-  #       nest(data = -all_of(annotation_column)) |>
+  #       nest(data = -all_of(cell_type_column)) |>
   #         mutate(data = map(
   #           data,
   #           ~ .x |>
@@ -689,43 +698,46 @@ alive_identification <- function(input_read_RNA_assay,
     #mutate(subsets_Ribo_percent = PercentageFeatureSet(input_read_RNA_assay,  pattern = "^RPS|^RPL", assay = assay)[,1]) |>
     mutate(subsets_Ribo_percent = percentage_output)
   
-  # Add cell type labels and determine high mitochondrion content, if annotation_label_transfer_tbl is provided
-  if(annotation_column |> is.null() |> not()) {
+  # Add cell type labels and determine high mitochondrion content, if cell_type_ensembl_harmonised_tbl is provided
+  if(cell_type_column |> is.null() |> not()) {
     
     if (
-      inherits(annotation_label_transfer_tbl, "tbl_df") &&
-      annotation_column %in% colnames(annotation_label_transfer_tbl)
+      inherits(cell_type_ensembl_harmonised_tbl, "tbl_df") &&
+      cell_type_column %in% colnames(cell_type_ensembl_harmonised_tbl)
     ) {
       
       mitochondrion <- qc_metrics %>%
-        left_join(annotation_label_transfer_tbl, by = ".cell") 
+        left_join(cell_type_ensembl_harmonised_tbl, by = ".cell") 
       
       ribosome =
         ribosome |>
-        left_join(annotation_label_transfer_tbl, by = ".cell") 
+        # Only retrieve metadata so nesting in the next step won't break
+        left_join(cell_type_ensembl_harmonised_tbl, by = ".cell") |> as_tibble()
     }
     
     
-    else if (annotation_column %in% colnames(as_tibble(input_read_RNA_assay[1,1]))) {
+    else if (cell_type_column %in% colnames(as_tibble(input_read_RNA_assay[1,1]))) {
       
       mitochondrion <- 
         qc_metrics %>%
-        left_join(input_read_RNA_assay |> select(.cell, all_of(annotation_column)), by = ".cell") 
+        left_join(input_read_RNA_assay |> select(.cell, all_of(cell_type_column)), by = ".cell") 
       
       
       ribosome = 
         ribosome |>
-        left_join(input_read_RNA_assay |> select(.cell, all_of(annotation_column)), by = ".cell") 
+        # Only retrieve metadata so nesting in the next step won't break
+        left_join(input_read_RNA_assay |> select(.cell, all_of(cell_type_column)), by = ".cell") |> as_tibble()
+        
     }
     
     
     mitochondrion = 
       mitochondrion %>%
-      nest(data = -all_of(annotation_column)) 
+      nest(data = -all_of(cell_type_column)) 
     
     ribosome =
       ribosome |>
-      nest(data = -all_of(annotation_column)) 
+      nest(data = -all_of(cell_type_column)) 
     
   } else {
     # Determing high mitochondrion content 
@@ -757,8 +769,11 @@ alive_identification <- function(input_read_RNA_assay,
   # Merge
   mitochondrion |>
     left_join(ribosome, by=".cell") |>
-    mutate(alive = !high_mitochondrion) # & !high_ribosome ) |>
-  
+    mutate(alive = !high_mitochondrion) |> # & !high_ribosome ) |>
+  # Select informative columns
+    select(cell_type_unified_ensemble = cell_type_unified_ensemble.x,
+           .cell, contains("subsets"), contains("observation"),
+           donor_id, dataset_id, sample_id, contains("high"), alive)
 }
 
 

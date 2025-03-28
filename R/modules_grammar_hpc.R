@@ -280,8 +280,8 @@ remove_dead_scuttle.HPCell = function(
       user_function = alive_identification |> quote() , 
       input_read_RNA_assay = target_input |> safe_as_name(), 
       empty_droplets_tbl = target_empty_droplets |> safe_as_name() ,
-      annotation_label_transfer_tbl = target_annotation |> safe_as_name() ,
-      annotation_column = group_by,
+      cell_type_ensembl_harmonised_tbl = target_annotation |> safe_as_name() ,
+      cell_type_column = group_by,
       feature_nomenclature = "gene_nomenclature" |> is_target() 
     )
   

@@ -95,40 +95,54 @@ save_experiment_data <- function(data,
   )
 }
 
-#' Duplicate Single-Column Assay in SingleCellExperiment Object
+#' Duplicate Single-Column Assay in a SingleCellExperiment or Seurat Object
 #'
-#' This function handles SingleCellExperiment (SCE) objects where a specified assay 
+#' This function handles a `SingleCellExperiment` or `Seurat` object where a specified assay 
 #' contains only one column. It duplicates the single-column assay to avoid potential 
 #' errors during saving or downstream analysis that require at least two columns. 
 #' The duplicated column is marked with a prefix `DUMMY___` to distinguish it. 
 #' Corresponding entries in the column metadata (`colData`) are also duplicated.
 #'
-#' @param sce A `SingleCellExperiment` object.
+#' @param data A `SingleCellExperiment` or `Seurat` object.
 #' @importFrom SummarizedExperiment assay assays colData
 #' @importFrom SingleCellExperiment SingleCellExperiment
+#' @importFrom Seurat GetAssayData CreateSeuratObject
 #' @importFrom rlang set_names
-#' @return A modified `SingleCellExperiment` object with the single-column assay 
-#' duplicated if applicable. If the assay already has more than one column, the 
-#' function returns the original object unchanged.
-duplicate_single_column_assay <- function(sce) {
+#' @return A modified `SingleCellExperiment` or `Seurat` object with the single-column assay 
+#' duplicated if applicable.
+duplicate_single_column_assay <- function(data) {
   
-  assay_name = sce |> assays() |> names() |> magrittr::extract2(1)
+  assay_name = data@assays|> names() |> magrittr::extract2(1)
   
-  if(ncol(assay(sce)) == 1) {
+  if (inherits(data, "SingleCellExperiment") && ncol(data) == 1){
     
     # Duplicate the assay to prevent saving errors due to single-column matrices
-    my_assay = cbind(assay(sce), assay(sce))
+    my_assay = cbind(assay(data), assay(data))
     # Rename the second column to distinguish it
     colnames(my_assay)[2] = paste0("DUMMY", "___", colnames(my_assay)[2])
     
-    cd = colData(sce)
+    cd = colData(data)
     cd = cd |> rbind(cd)
     rownames(cd)[2] = paste0("DUMMY", "___", rownames(cd)[2])
     
-    sce =  SingleCellExperiment(assay = list(my_assay) |> set_names(assay_name), colData = cd)
-    sce
+    data =  SingleCellExperiment(assay = list(my_assay) |> set_names(assay_name), colData = cd)
+    data
   } 
-  sce
+  
+  if (inherits(data, "Seurat") && ncol(data) == 1) {
+    
+    my_assay <- GetAssayData(data, layer = "counts", assay = assay_name)
+    my_assay <- cbind(my_assay, my_assay)
+    colnames(my_assay)[2] <- paste0("DUMMY___", colnames(my_assay)[2])
+    
+    cd <- data[[]]
+    cd <- rbind(cd, cd)
+    rownames(cd)[2] <- paste0("DUMMY___", rownames(cd)[2])
+    
+    data <- CreateSeuratObject(counts = my_assay, meta.data = cd, assay = assay_name)
+    data
+  }
+  data
 }
 
 #' Gene name conversion using ensembl database
