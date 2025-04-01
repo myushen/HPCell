@@ -66,7 +66,13 @@ metacell_tbl <- split_sample_cell_type_calculate_metacell_membership(input_seura
                                                                      x = cell_type_column,
                                                                      min_cells_per_metacell = 10)
 
-#
+# Define output from cell_communication
+cell_communication_tbl = HPCell:::cell_communication(input_seurat_abc,
+                                                     empty_droplets_tbl = NULL,
+                                                     cell_type_tbl = NULL,
+                                                     assay = NULL,
+                                                     cell_type_column = "Cell_type_in_each_tissue")
+
 # empty_droplets_tbl = HPCell:::empty_droplet_id(input_seurat_list[[1]], filter_empty_droplets = TRUE)
 # 
 # # Define output from annotation_label_transfer 

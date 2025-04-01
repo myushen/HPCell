@@ -2022,6 +2022,119 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
   
 }
 
+#' Perform Human Cell-Cell Communication Analysis
+#' @description This function performs ligand-receptor cells communication analysis.
+#'   It processes single-cell RNA sequencing data to identify and analyze intercellular communication networks.
+#' @param input_read_RNA_assay A SingleCellExperiment or Seurat object containing gene expression data
+#' @param empty_droplets_tbl Optional tibble identifying empty droplets to be filtered out
+#' @param cell_type_tbl Optional tibble containing cell type information
+#' @param assay Character string specifying which assay to use
+#' @param cell_type_column Character string specifying the column name containing cell type annotations
+#' @param feature_nomenclature Character vector specifying gene in Symbol or Ensemble format
+#' @param ... Additional arguments passed to \code{CellChat::subsetDB}
+#' @return A CellChat tibble containing cells communication result.
+#' @importFrom CellChat createCellChat subsetDB subsetData identifyOverExpressedGenes 
+#'   identifyOverExpressedInteractions computeCommunProb filterCommunication subsetCommunication
+#' @importFrom tibble as_tibble
+#' @importFrom dplyr filter
+#' @export
+cell_communication <- function(input_read_RNA_assay,
+                               empty_droplets_tbl = NULL,
+                               cell_type_tbl = NULL,
+                               assay = NULL,
+                               cell_type_column = NULL,
+                               feature_nomenclature,
+                               ...){
+  
+  if (input_read_RNA_assay |> is.null()) return(NULL)
+  
+  # CellChat identifyOverExpressedGenes() would only support at least 2 groups
+  if (cell_type_tbl |> distinct(.data[[cell_type_column]]) |> pull() |> length() == 1) return(NULL)
+  
+  # Get assay
+  if(is.null(assay)) my_assay = input_read_RNA_assay@assays |> names() |> magrittr::extract2(1)
+  
+  # Identify cell type column
+  if(
+    is.null(cell_type_column) && 
+    !cell_type_column %in% colnames(as_tibble(input_read_RNA_assay[1,1]))
+  ) stop("HPCell says: Your `cell_type_column` columns are not present in your data. Please run celltype_consensus_constructor() to get the cell type annotation that you can use as grouping.")
+  
+  # Avoid small number of cells 
+  if (!is.null(empty_droplets_tbl)) {
+    input_read_RNA_assay <- input_read_RNA_assay |>
+      left_join(empty_droplets_tbl, by = ".cell") |>
+      dplyr::filter(!empty_droplet)
+  } 
+  
+  # Append cell type
+  if (!is.null(cell_type_tbl) && 
+      cell_type_column %in% colnames(cell_type_tbl)) {
+    input_read_RNA_assay <- input_read_RNA_assay |>
+      left_join(cell_type_tbl, by = ".cell") |> 
+      select(everything(), !!cell_type_column)
+  } else if (!is.null(cell_type_tbl) && 
+             !cell_type_column %in% colnames(cell_type_tbl))
+    stop ("HPCell says: Your `cell_type_column` does not present in `cell_type_tbl` data")
+  
+  # Note: CellChat only takes gene symbols as input, thus conversion step is required for ensemble IDs
+  if (feature_nomenclature == "ensembl") {
+    
+    gene_map = rownames(input_read_RNA_assay) |> convert_gene_names(current_nomenclature = feature_nomenclature) |> 
+      filter(!is.na(gene_name))
+    
+    input_read_RNA_assay = input_read_RNA_assay[gene_map$gene_id, ]
+    rownames(input_read_RNA_assay) = gene_map$gene_name
+  }
+  
+  # Construct cellchat object
+  if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
+    cellchat = createCellChat(object = input_read_RNA_assay, group.by = cell_type_column, assay = my_assay)
+    }
+  else if (inherits(input_read_RNA_assay, "Seurat")){
+    cellchat = createCellChat(object = input_read_RNA_assay, group.by = cell_type_column, assay = my_assay)
+  }
+  
+  CellChatDB <- CellChatDB.human
+  
+  # Giving users option to choose the communication annotation 
+  CellChatDB.use <- subsetDB(CellChatDB, key = "annotation", ...)
+  cellchat@DB <- CellChatDB.use
+  
+  # Preprocessing
+  # subset the expression data of signaling genes for saving computation cost. By default, feature=NULL means subsetting the expression data of signaling genes in CellChatDB.use
+  cellchat <- subsetData(cellchat) # This step is necessary even if using the whole database
+  future::plan("multisession", workers = 4) # do parallel
+  cellchat <- identifyOverExpressedGenes(cellchat)
+  cellchat <- identifyOverExpressedInteractions(cellchat)
+  
+  # Compute the communication probability and infer cellular communication network
+  cellchat <- computeCommunProb(cellchat, type = "triMean")
+  
+  # Filter the number of cells in each group are less than 10
+  cellchat <- filterCommunication(cellchat, min.cells = 10)
+  
+  # Extract the inferred cellular communication network as a data frame
+  # By default, slot.name = "net" extracts the inferred communication at the level of ligands/receptors
+  # Set slot.name = "netP" to access the the inferred communications at the level of signaling pathways
+  # If all arguments are NULL, it returns a data frame consisting of all the inferred cell-cell communications
+  cell_communication_tbl <- tryCatch(
+    subsetCommunication(cell_chat),
+    error = function(e) {
+      message("Error in subsetCommunication(): ", e$message)
+      return(NULL)
+    }
+  )
+  
+  if (!is.null(cell_communication_tbl)) {
+    cell_communication_tbl |>
+      # In this case, we want to see the communication between the matched source and target cell types
+      filter(source == target) |>
+      as_tibble()
+  } else {NULL}
+  
+}
+
 
 #' Test Differential Abundance in SummarizedExperiment Object
 #'
