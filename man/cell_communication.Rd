@@ -7,6 +7,7 @@
 cell_communication(
   input_read_RNA_assay,
   empty_droplets_tbl = NULL,
+  alive_identification_tbl = NULL,
   cell_type_tbl = NULL,
   assay = NULL,
   cell_type_column = NULL,
@@ -19,6 +20,8 @@ cell_communication(
 
 \item{empty_droplets_tbl}{Optional tibble identifying empty droplets to be filtered out}
 
+\item{alive_identification_tbl}{Optional tibble identifying dead cells to be filtered out}
+
 \item{cell_type_tbl}{Optional tibble containing cell type information}
 
 \item{assay}{Character string specifying which assay to use}
@@ -30,9 +33,10 @@ cell_communication(
 \item{...}{Additional arguments passed to \code{CellChat::subsetDB}}
 }
 \value{
-A CellChat tibble containing cells communication result.
+A CellChat tibble containing the inferred communication at the level of
+ligands/receptors
 }
 \description{
-This function performs ligand-receptor cells communication analysis.
+This function performs cells communication analysis.
 It processes single-cell RNA sequencing data to identify and analyze intercellular communication networks.
 }

@@ -2023,23 +2023,26 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 }
 
 #' Perform Human Cell-Cell Communication Analysis
-#' @description This function performs ligand-receptor cells communication analysis.
+#' @description This function performs cells communication analysis.
 #'   It processes single-cell RNA sequencing data to identify and analyze intercellular communication networks.
 #' @param input_read_RNA_assay A SingleCellExperiment or Seurat object containing gene expression data
 #' @param empty_droplets_tbl Optional tibble identifying empty droplets to be filtered out
+#' @param alive_identification_tbl Optional tibble identifying dead cells to be filtered out
 #' @param cell_type_tbl Optional tibble containing cell type information
 #' @param assay Character string specifying which assay to use
 #' @param cell_type_column Character string specifying the column name containing cell type annotations
 #' @param feature_nomenclature Character vector specifying gene in Symbol or Ensemble format
 #' @param ... Additional arguments passed to \code{CellChat::subsetDB}
-#' @return A CellChat tibble containing cells communication result.
+#' @return A CellChat tibble containing the inferred communication at the level of 
+#'     ligands/receptors
 #' @importFrom CellChat createCellChat subsetDB subsetData identifyOverExpressedGenes 
 #'   identifyOverExpressedInteractions computeCommunProb filterCommunication subsetCommunication
 #' @importFrom tibble as_tibble
-#' @importFrom dplyr filter
+#' @importFrom dplyr filter mutate
 #' @export
 cell_communication <- function(input_read_RNA_assay,
                                empty_droplets_tbl = NULL,
+                               alive_identification_tbl = NULL,
                                cell_type_tbl = NULL,
                                assay = NULL,
                                cell_type_column = NULL,
@@ -2067,6 +2070,13 @@ cell_communication <- function(input_read_RNA_assay,
       dplyr::filter(!empty_droplet)
   } 
   
+  # Avoid dead cells
+  if (!is.null(alive_identification_tbl)) {
+    input_read_RNA_assay <- input_read_RNA_assay |>
+      left_join(alive_identification_tbl, by = ".cell") |>
+      dplyr::filter(alive)
+  } 
+  
   # Append cell type
   if (!is.null(cell_type_tbl) && 
       cell_type_column %in% colnames(cell_type_tbl)) {
@@ -2087,6 +2097,8 @@ cell_communication <- function(input_read_RNA_assay,
     rownames(input_read_RNA_assay) = gene_map$gene_name
   }
   
+  # Remove NA cell_type 
+  input_read_RNA_assay = input_read_RNA_assay |> filter(!is.na(.data[[cell_type_column]]))
   # Construct cellchat object
   if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
     cellchat = createCellChat(object = input_read_RNA_assay, group.by = cell_type_column, assay = my_assay)
@@ -2114,12 +2126,14 @@ cell_communication <- function(input_read_RNA_assay,
   # Filter the number of cells in each group are less than 10
   cellchat <- filterCommunication(cellchat, min.cells = 10)
   
+  gc()
+  
   # Extract the inferred cellular communication network as a data frame
   # By default, slot.name = "net" extracts the inferred communication at the level of ligands/receptors
   # Set slot.name = "netP" to access the the inferred communications at the level of signaling pathways
   # If all arguments are NULL, it returns a data frame consisting of all the inferred cell-cell communications
   cell_communication_tbl <- tryCatch(
-    subsetCommunication(cell_chat),
+    subsetCommunication(cellchat),
     error = function(e) {
       message("Error in subsetCommunication(): ", e$message)
       return(NULL)
@@ -2128,8 +2142,9 @@ cell_communication <- function(input_read_RNA_assay,
   
   if (!is.null(cell_communication_tbl)) {
     cell_communication_tbl |>
-      # In this case, we want to see the communication between the matched source and target cell types
-      filter(source == target) |>
+      mutate(sample_id = as.character(unique(cell_type_tbl$sample_id))) |>
+      # # In this case, we want to see the communication between the matched source and target cell types
+      # filter(source == target) |>
       as_tibble()
   } else {NULL}
   
