@@ -2088,7 +2088,7 @@ cell_communication <- function(input_read_RNA_assay,
   # Avoid dead cells
   if (!is.null(alive_identification_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |>
-      left_join(alive_identification_tbl, by = ".cell") |>
+      left_join(alive_identification_tbl) |>
       dplyr::filter(alive)
   } 
   
@@ -2096,7 +2096,7 @@ cell_communication <- function(input_read_RNA_assay,
   if (!is.null(cell_type_tbl) && 
       cell_type_column %in% colnames(cell_type_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |>
-      left_join(cell_type_tbl, by = ".cell") |> 
+      left_join(cell_type_tbl) |> 
       select(everything(), !!cell_type_column)
   } else if (!is.null(cell_type_tbl) && 
              !cell_type_column %in% colnames(cell_type_tbl))
