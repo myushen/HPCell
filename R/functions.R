@@ -795,7 +795,7 @@ alive_identification <- function(input_read_RNA_assay,
 #'
 #' @importFrom dplyr left_join filter select
 #' @importFrom Matrix Matrix 
-#' @importFrom SummarizedExperiment colData assayNames
+#' @importFrom SummarizedExperiment colData assayNames assayNames<-
 #' @importFrom Seurat as.SingleCellExperiment
 #' @import scDblFinder
 #' @export
@@ -809,6 +809,8 @@ doublet_identification <- function(input_read_RNA_assay,
   # Fix GChecks 
   .cell = NULL 
   empty_droplet = NULL 
+  
+  if (is.null(input_read_RNA_assay)) return(NULL)
   
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
@@ -834,6 +836,12 @@ doublet_identification <- function(input_read_RNA_assay,
         filter(alive)
   } 
   
+  # In rare cases, all cells in a sample are empty droplets or dead
+  if (ncol(input_read_RNA_assay) == 0) return(NULL)
+  
+  # In rare cases, only one cell in a sample is left
+  if (ncol(input_read_RNA_assay) == 1) input_read_RNA_assay = input_read_RNA_assay |> duplicate_single_column_assay()
+  
   # Condition as scDblFinder only accept assay "counts"
   if (!"counts" %in% (SummarizedExperiment::assays(filter_empty_droplets) |> names())){
     SummarizedExperiment::assay(filter_empty_droplets, "counts") <-  
@@ -847,13 +855,16 @@ doublet_identification <- function(input_read_RNA_assay,
   # Annotate
   input_read_RNA_assay |> 
     left_join(annotation_label_transfer_tbl, by = ".cell")|>
-    scDblFinder(clusters = ifelse(reference_label_fine=="none", TRUE, reference_label_fine)) |>
+    scDblFinder(clusters = ifelse(# The length of the provided cluster vector must be greater than one. Otherwise, faster clustering will be performed.
+                                  reference_label_fine=="none" | length(unique(reference_label_fine)) == 1,
+                                  TRUE, reference_label_fine)) |>
     # scDblFinder(clusters = NULL) |> 
     colData() |> 
     as_tibble(rownames = ".cell") |> 
     select(.cell, scDblFinder.cluster, scDblFinder.class, scDblFinder.mostLikelyOrigin, 
            # Whether the mostLikelyOrigin is ambiguous or rather clear
-           scDblFinder.originAmbiguous) 
+           scDblFinder.originAmbiguous) |> 
+    mutate(scDblFinder.cluster = as.character(scDblFinder.cluster))
 }
 
 
@@ -1611,6 +1622,12 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
         by=".cell"
       ) |> dplyr::filter(scDblFinder.class == "singlet") 
   }
+  
+  # In rare cases, all cells in a sample are from empty droplets or dead or doublets
+  if (ncol(sample_sce) == 0) return(NULL)
+  
+  # In rare cases, only one cell in a sample is left
+  if (ncol(sample_sce) == 1) sample_sce = sample_sce |> duplicate_single_column_assay()
   
   metacell_gamma_membership_tibble <- sample_sce |> left_join(cell_type_tbl) |> 
     dplyr::group_split(!!sym(x)) |>
