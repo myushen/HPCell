@@ -6,9 +6,6 @@
 \usage{
 preprocess_SCimplify(
   input_read_RNA_assay,
-  empty_droplets_tbl = NULL,
-  alive_identification_tbl = NULL,
-  cell_cycle_score_tbl = NULL,
   assay = NULL,
   genes.use = NULL,
   genes.exclude = NULL,
@@ -25,12 +22,6 @@ preprocess_SCimplify(
 }
 \arguments{
 \item{input_read_RNA_assay}{A \code{SingleCellExperiment} or \code{Seurat} object containing RNA assay data.}
-
-\item{empty_droplets_tbl}{A tibble identifying empty droplets.}
-
-\item{alive_identification_tbl}{A tibble from alive cell identification.}
-
-\item{cell_cycle_score_tbl}{A tibble from cell cycle scoring.}
 
 \item{assay}{assay used, default = "RNA"}
 

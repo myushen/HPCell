@@ -793,17 +793,17 @@ alive_identification <- function(input_read_RNA_assay,
 #'
 #' @return A tibble containing cells with their scDblFinder scores.
 #'
-#' @importFrom dplyr left_join filter
+#' @importFrom dplyr left_join filter select
 #' @importFrom Matrix Matrix 
-#' @importFrom SummarizedExperiment colData
+#' @importFrom SummarizedExperiment colData assayNames
 #' @importFrom Seurat as.SingleCellExperiment
 #' @import scDblFinder
 #' @export
 doublet_identification <- function(input_read_RNA_assay, 
                                    empty_droplets_tbl = NULL, 
                                    alive_identification_tbl = NULL, 
-                                   #annotation_label_transfer_tbl, 
-                                   #reference_label_fine,
+                                   annotation_label_transfer_tbl,
+                                   reference_label_fine,
                                    assay = NULL){
   
   # Fix GChecks 
@@ -840,15 +840,20 @@ doublet_identification <- function(input_read_RNA_assay,
       SummarizedExperiment::assay(filter_empty_droplets, assay)
     SummarizedExperiment::assay(filter_empty_droplets, assay) <- NULL
   }
+  
+  # scDblFinder can only handle counts assay, thus rename
+  assayNames(input_read_RNA_assay)[assayNames(input_read_RNA_assay) == assay] <- "counts"
+  
   # Annotate
   input_read_RNA_assay |> 
-    #left_join(annotation_label_transfer_tbl, by = ".cell")|>
-    #scDblFinder(clusters = ifelse(reference_label_fine=="none", TRUE, reference_label_fine)) |>
-    scDblFinder(clusters = NULL) |> 
+    left_join(annotation_label_transfer_tbl, by = ".cell")|>
+    scDblFinder(clusters = ifelse(reference_label_fine=="none", TRUE, reference_label_fine)) |>
+    # scDblFinder(clusters = NULL) |> 
     colData() |> 
     as_tibble(rownames = ".cell") |> 
-    select(.cell, contains("scDblFinder")) 
-  
+    select(.cell, scDblFinder.cluster, scDblFinder.class, scDblFinder.mostLikelyOrigin, 
+           # Whether the mostLikelyOrigin is ambiguous or rather clear
+           scDblFinder.originAmbiguous) 
 }
 
 
@@ -1078,9 +1083,6 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
 #' approximate sampling, and PCA computation methods.
 #'
 #' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
-#' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param alive_identification_tbl A tibble from alive cell identification.
-#' @param cell_cycle_score_tbl A tibble from cell cycle scoring.
 #' @param assay assay used, default = "RNA" 
 #' @param genes.use a vector of genes used to compute PCA
 #' @param genes.exclude a vector of genes to be excluded when computing PCA
@@ -1101,9 +1103,6 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
 #' @importFrom SuperCell build_knn_graph
 #' @export
 preprocess_SCimplify <- function(input_read_RNA_assay,
-                                 empty_droplets_tbl = NULL, 
-                                 alive_identification_tbl = NULL, 
-                                 cell_cycle_score_tbl = NULL,
                                  assay = NULL,
                                  genes.use = NULL,
                                  genes.exclude = NULL,
@@ -1141,30 +1140,6 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
         assay.name = assay_name_old,
         new.assay.name = assay)
   }
-  
-  # avoid small number of cells 
-  if (!is.null(empty_droplets_tbl)) {
-    input_read_RNA_assay_transform <- input_read_RNA_assay_transform |>
-      left_join(empty_droplets_tbl, by = ".cell") |>
-      dplyr::filter(!empty_droplet)
-  } 
-  
-  if (!is.null(alive_identification_tbl)) {
-    input_read_RNA_assay_transform =
-      input_read_RNA_assay_transform |>
-      left_join(
-        alive_identification_tbl ,
-        by=".cell"
-      ) 
-  }
-  
-  if(!is.null(cell_cycle_score_tbl)) 
-    input_read_RNA_assay_transform = input_read_RNA_assay_transform |>
-    
-    left_join(
-      cell_cycle_score_tbl ,
-      by=".cell"
-    )
   
   # Get normalise and scale gene expression matrix with rows to be genes and cols to be cells
   normalized_rna <- 
@@ -1591,18 +1566,51 @@ calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce,
 #'
 #' @param sample_sce A SingleCellExperiment object containing single-cell data.
 #' @param cell_type_tbl A tibble of cell type.
+#' @param empty_droplets_tbl A tibble identifying empty droplets.
+#' @param alive_identification_tbl A tibble from alive cell identification.
+#' @param doublet_identification_tbl A tibble from doublet identification.
 #' @param x A character vector of cell type aggregation column.
 #' @param min_cells_per_metacell An integer of minimum cells in each metacell.
 #' @return A tibble with metacell membership data for each cell type.
 #' @export
 split_sample_cell_type_calculate_metacell_membership <- function(sample_sce, 
                                                                  cell_type_tbl,
+                                                                 empty_droplets_tbl = NULL,
+                                                                 alive_identification_tbl = NULL,
+                                                                 doublet_identification_tbl = NULL,
                                                                  x="cell_type",
                                                                  min_cells_per_metacell = 30) {
   
   if (sample_sce |> is.null()) return(NULL)
   
   if (cell_type_tbl |> is.null()) return(NULL)
+  
+  # avoid small number of cells 
+  if (!is.null(empty_droplets_tbl)) {
+    sample_sce <- sample_sce |>
+      left_join(empty_droplets_tbl, by = ".cell") |>
+      dplyr::filter(!empty_droplet)
+  } 
+  
+  # remove dead cells
+  if (!is.null(alive_identification_tbl)) {
+    sample_sce =
+      sample_sce |>
+      left_join(
+        alive_identification_tbl ,
+        by=".cell"
+      ) |> dplyr::filter(alive) 
+  }
+  
+  # remove doublets
+  if (!is.null(doublet_identification_tbl)) {
+    sample_sce =
+      sample_sce |>
+      left_join(
+        doublet_identification_tbl ,
+        by=".cell"
+      ) |> dplyr::filter(scDblFinder.class == "singlet") 
+  }
   
   metacell_gamma_membership_tibble <- sample_sce |> left_join(cell_type_tbl) |> 
     dplyr::group_split(!!sym(x)) |>
@@ -1813,11 +1821,11 @@ create_pseudobulk <- function(input_read_RNA_assay,
       input_read_RNA_assay,
       empty_droplets_tbl,
       non_batch_variation_removal_S = NULL, 
-      alive_identification_tbl = NULL,
+      alive_identification_tbl,
       cell_cycle_score_tbl = NULL,
       cell_type_ensembl_harmonised_tbl,
       annotation_label_transfer_tbl, 
-      doublet_identification_tbl = NULL
+      doublet_identification_tbl
     )
   
   # In rare cases, empty droplets observed across cells in a sample

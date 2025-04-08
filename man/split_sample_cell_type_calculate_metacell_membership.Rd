@@ -7,6 +7,9 @@
 split_sample_cell_type_calculate_metacell_membership(
   sample_sce,
   cell_type_tbl,
+  empty_droplets_tbl = NULL,
+  alive_identification_tbl = NULL,
+  doublet_identification_tbl = NULL,
   x = "cell_type",
   min_cells_per_metacell = 30
 )
@@ -15,6 +18,12 @@ split_sample_cell_type_calculate_metacell_membership(
 \item{sample_sce}{A SingleCellExperiment object containing single-cell data.}
 
 \item{cell_type_tbl}{A tibble of cell type.}
+
+\item{empty_droplets_tbl}{A tibble identifying empty droplets.}
+
+\item{alive_identification_tbl}{A tibble from alive cell identification.}
+
+\item{doublet_identification_tbl}{A tibble from doublet identification.}
 
 \item{x}{A character vector of cell type aggregation column.}
 

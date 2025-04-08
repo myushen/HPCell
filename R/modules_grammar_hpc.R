@@ -312,7 +312,8 @@ score_cell_cycle_seurat.HPCell = function(input_hpc, target_input = "data_object
 #' @export
 remove_doublets_scDblFinder <- function(
     input_hpc, target_input = "data_object", target_output = "doublet_tbl",  
-    target_empry_droplets = "empty_tbl", target_alive = "alive_tbl"
+    target_empry_droplets = "empty_tbl", target_alive = "alive_tbl", 
+    target_annotation = "annotation_tbl", reference_label_group_by = "monaco_first.labels.fine"
   ) {
   UseMethod("remove_doublets_scDblFinder")
 }
@@ -320,7 +321,8 @@ remove_doublets_scDblFinder <- function(
 #' @export
 remove_doublets_scDblFinder.HPCell = function(
     input_hpc, target_input = "data_object", target_output = "doublet_tbl", 
-    target_empry_droplets = "empty_tbl", target_alive = "alive_tbl"
+    target_empry_droplets = "empty_tbl", target_alive = "alive_tbl",
+    target_annotation = "annotation_tbl", reference_label_group_by = "monaco_first.labels.fine"
   ) {
   
   input_hpc |> 
@@ -329,7 +331,9 @@ remove_doublets_scDblFinder.HPCell = function(
       user_function = doublet_identification |> quote() , 
       input_read_RNA_assay = target_input |> is_target(), 
       empty_droplets_tbl = target_empry_droplets |> is_target() ,
-      alive_identification_tbl = target_alive |> is_target()
+      alive_identification_tbl = target_alive |> is_target(),
+      annotation_label_transfer_tbl = target_annotation |> is_target(),
+      reference_label_fine = reference_label_group_by
     )
   
 }
@@ -386,7 +390,9 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
 #' @export
 cluster_metacell <- function(input_hpc, target_input = "data_object", 
                              target_celltype_ensembl = "cell_type_concensus_tbl",
-                             target_output = "metacell_tbl", group_by = NULL, 
+                             target_output = "metacell_tbl", target_empry_droplets = "empty_tbl",
+                             target_alive = "alive_tbl", target_doublet = "doublet_tbl",
+                             group_by = NULL, 
                              cell_per_metacell = 30,
                              ...) {
   UseMethod("cluster_metacell")
@@ -395,7 +401,8 @@ cluster_metacell <- function(input_hpc, target_input = "data_object",
 #' @export
 cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object", 
                                    target_celltype_ensembl = "cell_type_concensus_tbl",
-                                   target_output = "metacell_tbl", 
+                                   target_output = "metacell_tbl",  target_empry_droplets = "empty_tbl",
+                                   target_alive = "alive_tbl", target_doublet = "doublet_tbl",
                                    group_by = NULL, 
                                    cell_per_metacell = 30,
                                    ...) {
@@ -406,6 +413,9 @@ cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object",
       user_function = split_sample_cell_type_calculate_metacell_membership |> quote() , 
       sample_sce = target_input |> is_target(), 
       cell_type_tbl = target_celltype_ensembl |> is_target(),
+      empty_droplets_tbl = target_empry_droplets |> is_target(),
+      alive_identification_tbl = target_alive |> is_target(),
+      doublet_identification_tbl = target_doublet |> is_target(),
       x = group_by,
       min_cells_per_metacell = cell_per_metacell,
       ...
