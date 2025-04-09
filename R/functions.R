@@ -786,7 +786,6 @@ alive_identification <- function(input_read_RNA_assay,
 #' @param assay The assay to be used for analysis, specified as a character string.
 #' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
 #' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param alive_identification_tbl A tibble identifying alive cells.
 #' @param annotation_label_transfer_tbl A tibble with annotation label transfer data.
 #' @param reference_label_fine Optional reference label for fine-tuning.
 #' @param assay Name of the assay to use.
@@ -801,7 +800,6 @@ alive_identification <- function(input_read_RNA_assay,
 #' @export
 doublet_identification <- function(input_read_RNA_assay, 
                                    empty_droplets_tbl = NULL, 
-                                   alive_identification_tbl = NULL, 
                                    annotation_label_transfer_tbl,
                                    reference_label_fine,
                                    assay = NULL){
@@ -818,53 +816,82 @@ doublet_identification <- function(input_read_RNA_assay,
   
   if (inherits(input_read_RNA_assay, "Seurat")) {
     input_read_RNA_assay <- input_read_RNA_assay |>
-      # Filtering empty
       Seurat::as.SingleCellExperiment() 
   } 
   
+  # Filtering empty
   if (!is.null(empty_droplets_tbl)) { 
-    
-    filter_empty_droplets <- input_read_RNA_assay |>
-      # Filtering empty
+    input_read_RNA_assay <- input_read_RNA_assay |>
+
       left_join(empty_droplets_tbl |> select(.cell, empty_droplet), by = ".cell") |>
       filter(!empty_droplet) 
-    
-    # Filtering dead
-    if(alive_identification_tbl |> is.null() |> not())
-      input_read_RNA_assay = input_read_RNA_assay |>
-        left_join(alive_identification_tbl |> select(.cell, alive), by = ".cell") |>
-        filter(alive)
-  } 
+  }
+  
+  # scDblFinder() can identify doublets from non-empty droplet cells, so no need to filter alive
   
   # In rare cases, all cells in a sample are empty droplets or dead
   if (ncol(input_read_RNA_assay) == 0) return(NULL)
-  
-  # In rare cases, only one cell in a sample is left
-  if (ncol(input_read_RNA_assay) == 1) input_read_RNA_assay = input_read_RNA_assay |> duplicate_single_column_assay()
-  
-  # Condition as scDblFinder only accept assay "counts"
-  if (!"counts" %in% (SummarizedExperiment::assays(filter_empty_droplets) |> names())){
-    SummarizedExperiment::assay(filter_empty_droplets, "counts") <-  
-      SummarizedExperiment::assay(filter_empty_droplets, assay)
-    SummarizedExperiment::assay(filter_empty_droplets, assay) <- NULL
-  }
   
   # scDblFinder can only handle counts assay, thus rename
   assayNames(input_read_RNA_assay)[assayNames(input_read_RNA_assay) == assay] <- "counts"
   
   # Annotate
-  input_read_RNA_assay |> 
-    left_join(annotation_label_transfer_tbl, by = ".cell")|>
-    scDblFinder(clusters = ifelse(# The length of the provided cluster vector must be greater than one. Otherwise, faster clustering will be performed.
-                                  reference_label_fine=="none" | length(unique(reference_label_fine)) == 1,
-                                  TRUE, reference_label_fine)) |>
-    # scDblFinder(clusters = NULL) |> 
+  # (Duplicate input when the cell number is too small)
+  # https://github.com/plger/scDblFinder/issues/123
+  input_read_RNA_assay <- input_read_RNA_assay |>
+      left_join(annotation_label_transfer_tbl)
+    
+  result <- tryCatch({
+    # Run scDblFinder
+    input_read_RNA_assay <- input_read_RNA_assay %>%
+      scDblFinder(clusters = reference_label_fine)
+  }, error = function(e) {
+    # Error handling
+    message("Error in scDblFinder: ", e$message)
+    new_cell_count <- 2 * ncol(input_read_RNA_assay)
+    
+    while (new_cell_count < 1500) {
+      # Double the dataset by column-binding to itself
+      my_assay = cbind(SummarizedExperiment::assay(input_read_RNA_assay), 
+                       SummarizedExperiment::assay(input_read_RNA_assay))
+      # Rename the second part of columns to distinguish it
+      colnames(my_assay)[ncol(my_assay)/2:ncol(my_assay)] = 
+        paste0("DUMMY", "___", colnames(my_assay)[ncol(my_assay)/2:ncol(my_assay)])
+      
+      cd = colData(input_read_RNA_assay)
+      cd = cd |> rbind(cd)
+      rownames(cd)[ncol(my_assay)/2:ncol(my_assay)] = 
+        paste0("DUMMY", "___", rownames(cd)[ncol(my_assay)/2:ncol(my_assay)])
+      
+      input_read_RNA_assay =  SingleCellExperiment(assay = list(my_assay) |> 
+                                                     set_names("counts"), colData = cd)
+
+      new_cell_count <- ncol(input_read_RNA_assay)
+      
+      # Try scDblFinder again
+      tryCatch({
+        input_read_RNA_assay <- input_read_RNA_assay %>%
+          scDblFinder(clusters = reference_label_fine)
+        # Break loop if scDblFinder succeeds
+        break
+      }, error = function(e) {
+        message("Error after increasing cells: ", e$message)
+      })
+    }
+    
+    if (new_cell_count >= 1500) {
+      # Switch strategy if the cell number exceeds 1500
+      message("Switching reference_label_fine to NULL due to persistent errors")
+      reference_label_fine <- NULL
+      input_read_RNA_assay <- input_read_RNA_assay %>%
+        scDblFinder(clusters = reference_label_fine)
+    }
+  })
+   
+  result |>
     colData() |> 
     as_tibble(rownames = ".cell") |> 
-    select(.cell, scDblFinder.cluster, scDblFinder.class, scDblFinder.mostLikelyOrigin, 
-           # Whether the mostLikelyOrigin is ambiguous or rather clear
-           scDblFinder.originAmbiguous) |> 
-    mutate(scDblFinder.cluster = as.character(scDblFinder.cluster))
+    select(.cell, scDblFinder.class)
 }
 
 
