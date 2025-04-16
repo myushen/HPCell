@@ -18,24 +18,33 @@ cell_type_column <- "Cell_type_in_each_tissue"
 # 
 reference_label_fine = HPCell:::reference_label_fine_id(tissue)
 
-empty_droplets_tbl = HPCell:::empty_droplet_id(input_seurat_abc, filter_empty_droplets = TRUE)
+empty_droplets_tbl = HPCell:::empty_droplet_threshold(input_seurat_abc, 
+                                                      feature_nomenclature = "symbol")
 
 # Define output from annotation_label_transfer 
 annotation_label_transfer_tbl = HPCell:::annotation_label_transfer(input_seurat_abc,
-                                                          empty_droplets_tbl)
+                                                          empty_droplets_tbl,
+                                                          reference_azimuth = "pbmcref",
+                                                          feature_nomenclature = "symbol")
+
+# Define output from cell_type_ensembl_harmonised
+cell_type_ensemble_tbl = HPCell:::cell_type_ensembl_harmonised(input_seurat_abc, 
+                                                              annotation_label_transfer_tbl)
 
 # Define output from alive_identification
 alive_identification_tbl = HPCell:::alive_identification(input_seurat_abc,
                                                 empty_droplets_tbl,
-                                                annotation_label_transfer_tbl)
+                                                cell_type_ensemble_tbl,
+                                                cell_type_column = "cell_type_unified_ensemble",
+                                                feature_nomenclature = "symbol")
 
 
 # Define output from doublet_identification
 doublet_identification_tbl = HPCell:::doublet_identification(input_seurat_abc,
                                                     empty_droplets_tbl,
                                                     alive_identification_tbl,
-                                                    annotation_label_transfer_tbl,
-                                                    reference_label_fine)
+                                                    cell_type_ensemble_tbl,
+                                                    reference_label_fine = "cell_type_unified_ensemble")
 
 # Define output from cell_cycle_scoring
 cell_cycle_score_tbl = HPCell:::cell_cycle_scoring(input_seurat_abc, empty_droplets_tbl)
@@ -63,6 +72,9 @@ metacell_tbl <- split_sample_cell_type_calculate_metacell_membership(input_seura
                                                                      input_seurat_abc[[]] |> 
                                                                        rownames_to_column(var = ".cell") |> 
                                                                        as_tibble(),
+                                                                     empty_droplets_tbl,
+                                                                     alive_identification_tbl,
+                                                                     doublet_identification_tbl,
                                                                      x = cell_type_column,
                                                                      min_cells_per_metacell = 10)
 
