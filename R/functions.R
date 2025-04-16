@@ -786,8 +786,6 @@ alive_identification <- function(input_read_RNA_assay,
 #' @param assay The assay to be used for analysis, specified as a character string.
 #' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
 #' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param annotation_label_transfer_tbl A tibble with annotation label transfer data.
-#' @param reference_label_fine Optional reference label for fine-tuning.
 #' @param assay Name of the assay to use.
 #'
 #' @return A tibble containing cells with their scDblFinder scores.
@@ -800,8 +798,8 @@ alive_identification <- function(input_read_RNA_assay,
 #' @export
 doublet_identification <- function(input_read_RNA_assay, 
                                    empty_droplets_tbl = NULL, 
-                                   annotation_label_transfer_tbl,
-                                   reference_label_fine,
+                                   # annotation_label_transfer_tbl,
+                                   # reference_label_fine,
                                    assay = NULL){
   
   # Fix GChecks 
@@ -836,62 +834,24 @@ doublet_identification <- function(input_read_RNA_assay,
   assayNames(input_read_RNA_assay)[assayNames(input_read_RNA_assay) == assay] <- "counts"
   
   # Annotate
-  # (Duplicate input when the cell number is too small)
-  # https://github.com/plger/scDblFinder/issues/123
-  input_read_RNA_assay <- input_read_RNA_assay |>
-      left_join(annotation_label_transfer_tbl)
-    
+  # Mark doublets to Unknown when scDblFinder fails and keep them in the downstream analysis.
   result <- tryCatch({
     # Run scDblFinder
-    input_read_RNA_assay <- input_read_RNA_assay %>%
-      scDblFinder(clusters = reference_label_fine)
+    input_read_RNA_assay <- input_read_RNA_assay |>
+      # By default, artificial doublets will be considered unidentifiable when score threshold below 0.2
+      scDblFinder(clusters = NULL)
   }, error = function(e) {
     # Error handling
     message("Error in scDblFinder: ", e$message)
-    new_cell_count <- 2 * ncol(input_read_RNA_assay)
-    
-    while (new_cell_count < 1500) {
-      # Double the dataset by column-binding to itself
-      my_assay = cbind(SummarizedExperiment::assay(input_read_RNA_assay), 
-                       SummarizedExperiment::assay(input_read_RNA_assay))
-      # Rename the second part of columns to distinguish it
-      colnames(my_assay)[ncol(my_assay)/2:ncol(my_assay)] = 
-        paste0("DUMMY", "___", colnames(my_assay)[ncol(my_assay)/2:ncol(my_assay)])
-      
-      cd = colData(input_read_RNA_assay)
-      cd = cd |> rbind(cd)
-      rownames(cd)[ncol(my_assay)/2:ncol(my_assay)] = 
-        paste0("DUMMY", "___", rownames(cd)[ncol(my_assay)/2:ncol(my_assay)])
-      
-      input_read_RNA_assay =  SingleCellExperiment(assay = list(my_assay) |> 
-                                                     set_names("counts"), colData = cd)
+    input_read_RNA_assay <- input_read_RNA_assay |> mutate(scDblFinder.class = "Unknown")
+    }
+  )
 
-      new_cell_count <- ncol(input_read_RNA_assay)
-      
-      # Try scDblFinder again
-      tryCatch({
-        input_read_RNA_assay <- input_read_RNA_assay %>%
-          scDblFinder(clusters = reference_label_fine)
-        # Break loop if scDblFinder succeeds
-        break
-      }, error = function(e) {
-        message("Error after increasing cells: ", e$message)
-      })
-    }
-    
-    if (new_cell_count >= 1500) {
-      # Switch strategy if the cell number exceeds 1500
-      message("Switching reference_label_fine to NULL due to persistent errors")
-      reference_label_fine <- NULL
-      input_read_RNA_assay <- input_read_RNA_assay %>%
-        scDblFinder(clusters = reference_label_fine)
-    }
-  })
-   
   result |>
-    colData() |> 
-    as_tibble(rownames = ".cell") |> 
+    colData() |>
+    as_tibble(rownames = ".cell") |>
     select(.cell, scDblFinder.class)
+
 }
 
 
@@ -1647,7 +1607,7 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
       left_join(
         doublet_identification_tbl ,
         by=".cell"
-      ) |> dplyr::filter(scDblFinder.class == "singlet") 
+      ) |> dplyr::filter(scDblFinder.class != "doublet") 
   }
   
   # In rare cases, all cells in a sample are from empty droplets or dead or doublets
@@ -1748,7 +1708,7 @@ preprocessing_output <- function(input_read_RNA_assay,
   if(doublet_identification_tbl |> is.null() |> not())
     input_read_RNA_assay <- input_read_RNA_assay |>
     left_join(doublet_identification_tbl |> select(.cell, scDblFinder.class), by = ".cell") |>
-    filter(scDblFinder.class=="singlet") 
+    filter(scDblFinder.class!="doublet") 
   
   # attach cell cycle
   if(cell_cycle_score_tbl |> is.null() |> not())

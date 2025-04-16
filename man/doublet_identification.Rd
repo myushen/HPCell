@@ -7,8 +7,6 @@
 doublet_identification(
   input_read_RNA_assay,
   empty_droplets_tbl = NULL,
-  annotation_label_transfer_tbl,
-  reference_label_fine,
   assay = NULL
 )
 }
@@ -16,10 +14,6 @@ doublet_identification(
 \item{input_read_RNA_assay}{A \code{SingleCellExperiment} or \code{Seurat} object containing RNA assay data.}
 
 \item{empty_droplets_tbl}{A tibble identifying empty droplets.}
-
-\item{annotation_label_transfer_tbl}{A tibble with annotation label transfer data.}
-
-\item{reference_label_fine}{Optional reference label for fine-tuning.}
 
 \item{assay}{Name of the assay to use.}
 }
