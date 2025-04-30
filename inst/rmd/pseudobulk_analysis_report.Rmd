@@ -215,7 +215,6 @@ data_for_pca <-
   dplyr::select(-TMM, -multiplier, -count_scaled) %>%
   tidybulk::scale_abundance(method = "TMMwsp")
 
-
 ```
 
 ## Checking that the input counts don't have global sequencing-depth effect
@@ -251,6 +250,7 @@ cum_var_explained <- cumsum(var_explained)
 
 # Find the number of components that explain at least 90% of the variance
 num_components <- which(cum_var_explained >= 0.9)[1]
+# num_components <- 20
 ## Without metadata 
 # my_pca =
 #   data_for_pca@assays@data$count_scaled |>
@@ -262,7 +262,8 @@ num_components <- which(cum_var_explained >= 0.9)[1]
 
 ```{r, echo=FALSE,results='hide', warning=FALSE, message=FALSE}
 # Find the number of components that explain at least 90% of the variance
-num_components <- which(cum_var_explained >= 0.9)[1]
+#num_components <- which(cum_var_explained >= 0.9)[1]
+#num_components <- 20
 ```
 
 ## Scree plot 
@@ -322,7 +323,7 @@ tidybulk::reduce_dimensions(method="PCA") |>
 tidybulk::pivot_sample() |>
 ggplot(aes(PC1, PC2, color=data_for_pca$.aggregated_cells)) +
 geom_point() +
-  theme_bw() +
+  theme_minimal() +
   theme(
     legend.position = "right", # or choose "bottom" if you prefer
     legend.key.size = unit(0.2, "cm"), # Adjust the size of the legend keys

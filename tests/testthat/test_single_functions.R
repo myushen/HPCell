@@ -654,6 +654,15 @@ sce_list <- lapply(split_values, function(value) {
 })
 
 
+##### Testing args 
+# empty_tbl <- tar_read(empty_tbl)
+# data_object <- tar_read(data_object)
+# alive_tbl <- tar_read(alive_tbl)
+# sample_name <- tar_read(sample_names)
+# cell_cycle_tbl <- tar_read(cell_cycle_tbl)
+# annotation_tbl <- tar_read(annotation_tbl)
+# doublet_tbl <- tar_read(doublet_tbl)
+# data_object <- tar_read(data_object)
 #########################################
 library(HPCell)
 library(targets)
@@ -665,8 +674,9 @@ library(crew.cluster)
 InstallData("ifnb")
 ifnb <- UpdateSeuratObject(ifnb)
 ifnb.list <- SplitObject(ifnb, split.by = "stim")
-file_paths <- c("~/HPCell/CTRL_seurat_tibble.rds", "~/HPCell/STIM_seurat_tibble.rds")
+file_paths <- c("~/CTRL_seurat_tibble.rds", "~/STIM_seurat_tibble.rds")
 
+#Subset 300 cells 
 ctrl_subset <- subset(ifnb.list$CTRL, cells = sample(Cells(ifnb.list$CTRL), size = 300))
 stim_subset <- subset(ifnb.list$STIM, cells = sample(Cells(ifnb.list$STIM), size = 300))
 
@@ -696,35 +706,47 @@ input_hpc |>
   )) |> 
   hpc_report(
     "empty_report",
-    rmd_path = system.file("rmd", "Empty_droplet_report.Rmd", package = "HPCell"),
+    rmd_path = system.file("rmd", "Empty_droptlet_report.qmd", package = "HPCell"),
     empty_tbl = "empty_tbl" |> is_target(),
     data_object = "data_object" |> is_target(),
     alive_tbl = "alive_tbl" |> is_target(),
     sample_name = "sample_names" |> is_target()
   ) |>
   hpc_report(
-    "doublet_report", 
-    rmd_path = system.file("rmd", "Doublet_identification_report.Rmd", package = "HPCell"),
-    data_object = "data_object" |> is_target(), 
-    doublet_tbl = "doublet_tbl" |> is_target(), 
-    annotation_tbl = "annotation_tbl" |> is_target(), 
-    sample_names = "sample_names" |> is_target()
-  ) |> 
-  hpc_report(
-    "Technical_variation_report", 
-    system.file("rmd", "Technical_variation_report_hpc.Rmd", package = "HPCell"),
-    data_object = "data_object" |> is_target(), 
-    empty_tbl = "empty_tbl" |> is_target(), 
-    sample_name = "sample_names" |> is_target()
-  ) |> 
-  hpc_report(
-    "pseudo_bulk_report", 
-    system.file("rmd", "pseudobulk_analysis_report.Rmd", package = "HPCell"),
-    data_object = "data_object" |>  is_target(),
-    empty_tbl = "empty_tbl" |> is_target(),
-    alive_tbl = "alive_tbl" |> is_target(),
-    cell_cycle_tbl = "cell_cycle_tbl" |> is_target(),
+    "doublet_report",
+    rmd_path = system.file("rmd", "Doublet_identification_report.qmd", package = "HPCell"),
+    data_object = "data_object" |> is_target(),
+    doublet_tbl = "doublet_tbl" |> is_target(),
     annotation_tbl = "annotation_tbl" |> is_target(),
-    doublet_tbl = "doublet_tbl" |> is_target(), 
+    sample_names = "sample_names" |> is_target()
+  ) |>
+  hpc_report(
+    "Technical_variation_report",
+    rmd_path = system.file("rmd", "technical_variation_report.qmd", package = "HPCell"),
+    data_object = "data_object" |> is_target(),
+    empty_tbl = "empty_tbl" |> is_target(),
     sample_name = "sample_names" |> is_target()
+  ) |>
+  hpc_report(
+  "pseudo_bulk_report",
+  rmd_path = system.file("rmd", "pseudobulk_analysis_report.qmd", package = "HPCell"),
+  data_object = "data_object" |>  is_target(),
+  empty_tbl = "empty_tbl" |> is_target(),
+  alive_tbl = "alive_tbl" |> is_target(),
+  cell_cycle_tbl = "cell_cycle_tbl" |> is_target(),
+  annotation_tbl = "annotation_tbl" |> is_target(),
+  doublet_tbl = "doublet_tbl" |> is_target(),
+  sample_name = "sample_names" |> is_target()
   )
+
+quarto::quarto_render(
+  input = "~/HPCell/Testing.qmd",
+  execute_params = list(
+    data_object = data_object,
+    empty_tbl = empty_tbl, 
+    sample_name = sample_name
+  ),
+  output_file = "output.html"
+)
+
+                      

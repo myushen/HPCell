@@ -73,7 +73,7 @@ calc_UMAP <- function(input_seurat) {
   return(x)
 }
 
-calc_UMAP_dbl_report <- map(data_object, calc_UMAP)
+calc_UMAP_dbl_report <- map(params$data_objec, calc_UMAP)
 
 ```
 
@@ -229,13 +229,13 @@ get_labels_clusters = function(.data, label_column, dim1, dim2){
 <!-- ``` -->
 
 
-```{r, echo = FALSE, warning=FALSE}
+```{r, out.width='100%', fig.width=15, fig.height=10, warning=FALSE, message=FALSE, echo=FALSE}
 # Joining info and returning a list of tibbles
 merged_combined_annotation_doublets <- list(
   calc_UMAP_dbl_report,
-  doublet_tbl,
-  annotation_tbl, 
-  sample_names
+  params$doublet_tbl,
+  params$annotation_tbl, 
+  params$sample_names
 ) |>
   pmap(
     ~ ..1 |>
@@ -292,7 +292,7 @@ merged_combined_annotation_doublets <- list(
       merged_combined_annotation_doublets |> 
         ggplot(aes(umap_1, umap_2, color = !!sym(cell_ann_col))) +  # Using the cell annotation column dynamically
         geom_point(shape = ".") +
-        theme_bw() +
+        theme_minimal() +
         labs(title = .y, color = "Cell Type") +
         ggrepel::geom_text_repel(
           data = get_labels_clusters(
@@ -377,7 +377,7 @@ merged_combined_annotation_doublets <-
   #plot proportion
   ggplot(aes(x = .data[[cell_ann_col]] , y = proportion, fill = scDblFinder.class)) +
   geom_bar(stat = "identity") +
-  theme_bw() +
+  theme_minimal() +
   facet_wrap(~ sample_column) +
   theme(axis.text.x=element_text(angle=70, hjust=1))
   ))
@@ -438,3 +438,11 @@ plot_merged_combined_annotation_doublets
 <!-- # Print plot  -->
 <!-- plot_merged_combined_annotation_doublets -->
 <!-- ``` -->
+
+:::
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

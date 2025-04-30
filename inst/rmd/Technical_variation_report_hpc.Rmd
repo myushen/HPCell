@@ -80,7 +80,7 @@ calc_UMAP_dbl_report <- map2(params$data_object, params$sample_name, calc_UMAP)
 ```
 
 
-```{r, echo=FALSE}
+```{r, out.width='100%', fig.width=15, fig.height=10, warning=FALSE, message=FALSE, echo=FALSE}
 data_umap<- calc_UMAP_dbl_report %>% bind_rows()
 # Plot
 plot_tissue_color =

@@ -10,7 +10,7 @@ params:
   sample_name: "NA"
 ---
 
-```{r,  warning=FALSE, message=FALSE, echo=FALSE}
+```{r, include = FALSE}
 library(HPCell)
 library(readr)
 library(dplyr)
@@ -41,6 +41,7 @@ library(tibble)
 library(magrittr)
 library(qs)
 library(S4Vectors)
+library(gridExtra)
 
 # sample_column <- "orig.ident"
 
@@ -150,7 +151,7 @@ print(plot)
 
 - The X-axis is on a logarithmic scale and represents the total count of RNA sequencing reads per cell, while the Y-axis shows the percentage of those reads that are mitochondrial. Each point on the plot represents a single cell.
 
-```{r,  warning=FALSE, message=FALSE, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=12, fig.height=7}
 
 merged_alive <- map2(meta_data_list, params$alive_tbl, merge_meta)
 combined_merged_alive <- bind_rows(merged_alive)
@@ -268,7 +269,7 @@ count_results
 
 - Shows the distribution of p-values for droplets in the lower 10 percentile of total within each tissue 
 - A low p-value signifies significance therefore we would reject those droplets as empty
-```{r,  warning=FALSE, message=FALSE, echo=FALSE}
+```{r,  echo=FALSE, message=FALSE, warning=FALSE, fig.width=12, fig.height=7}
 hist_p_val <- function(df) {
   if(df |> dplyr::filter(empty) |> nrow() != 0){
   df_filtered <- df %>%
@@ -290,56 +291,55 @@ plot_hist <- hist_p_val(combined_df)
 plot_hist
 ```
 
-## Rank vs total count across samples 
+<!-- ## Rank vs total count across samples  -->
 
-Plots are shown for all barcodes, barcodes corresponding to empty droplets,and barcodes corresponding to large or small cells. Ranks are calculated from the entire set of barcodes in all plots, for ease of comparison between plots. All axes are on a log-scale.
-```{r,  warning=FALSE, message=FALSE, echo=FALSE}
+<!-- Plots are shown for all barcodes, barcodes corresponding to empty droplets,and barcodes corresponding to large or small cells. Ranks are calculated from the entire set of barcodes in all plots, for ease of comparison between plots. All axes are on a log-scale. -->
+<!-- ```{r,  warning=FALSE, message=FALSE, echo=FALSE} -->
 
-merged_empty <- map2(meta_data_list, params$empty_tbl, merge_meta)
-combined_merged_empty <- bind_rows(merged_empty)
+<!-- merged_empty <- map2(meta_data_list, params$empty_tbl, merge_meta) -->
+<!-- combined_merged_empty <- bind_rows(merged_empty) -->
 
-# Define groups
-all_barcodes <- combined_merged_empty
+<!-- # Define groups -->
+<!-- all_barcodes <- combined_merged_empty -->
 
-empty_droplets <- combined_merged_empty |> 
-  dplyr::filter(empty_droplet == TRUE)
+<!-- empty_droplets <- combined_merged_empty |>  -->
+<!--   dplyr::filter(empty_droplet == TRUE) -->
 
-large_cells <- combined_merged_empty |> 
-  dplyr::filter(nCount_RNA > 5000) 
+<!-- large_cells <- combined_merged_empty |>  -->
+<!--   dplyr::filter(nCount_RNA > 5000)  -->
 
-small_cells <- combined_merged_empty |> 
-  dplyr::filter(nCount_RNA <= 5000)  
+<!-- small_cells <- combined_merged_empty |>  -->
+<!--   dplyr::filter(nCount_RNA <= 5000)   -->
 
-plot_data <- bind_rows(
-  all_barcodes %>% mutate(group = "All barcodes"),
-  empty_droplets %>% mutate(group = "Empty droplets"),
-  large_cells %>% mutate(group = "Large cells"),
-  small_cells %>% mutate(group = "Small cells")
-)
+<!-- plot_data <- bind_rows( -->
+<!--   all_barcodes %>% mutate(group = "All barcodes"), -->
+<!--   empty_droplets %>% mutate(group = "Empty droplets"), -->
+<!--   large_cells %>% mutate(group = "Large cells"), -->
+<!--   small_cells %>% mutate(group = "Small cells") -->
+<!-- ) -->
 
 
-# Create a function for plotting
-ggplot(plot_data, aes(x = rank, y = nCount_RNA)) +
-    geom_point(aes(color = group), alpha = 0.3) +  # Default transparency
-    scale_color_manual(values = c(
-        "All barcodes" = "pink",       # Default color for all barcodes
-        "Empty droplets" = "lightblue",      # Color for empty droplets
-        "Large cells" = "purple",         # Color for large cells
-        "Small cells" = "lightgrey"        # Light silver for small cells
-    )) +
-    scale_x_log10() +
-    scale_y_log10() +
-    facet_wrap(~ sample) +  # Facet by sample
-    labs(title = "Rank vs Total count across samples", x = "Rank", y = "Total count (nCount_RNA)") +
-    theme_minimal() +
-    theme(legend.position = "bottom")
-```
+<!-- # Create a function for plotting -->
+<!-- ggplot(plot_data, aes(x = rank, y = nCount_RNA)) + -->
+<!--     geom_point(aes(color = group), alpha = 0.3) +  # Default transparency -->
+<!--     scale_color_manual(values = c( -->
+<!--         "All barcodes" = "pink",       # Default color for all barcodes -->
+<!--         "Empty droplets" = "lightblue",      # Color for empty droplets -->
+<!--         "Large cells" = "purple",         # Color for large cells -->
+<!--         "Small cells" = "lightgrey"        # Light silver for small cells -->
+<!--     )) + -->
+<!--     scale_x_log10() + -->
+<!--     scale_y_log10() + -->
+<!--     facet_wrap(~ sample) +  # Facet by sample -->
+<!--     labs(title = "Rank vs Total count across samples", x = "Rank", y = "Total count (nCount_RNA)") + -->
+<!--     theme_minimal() + -->
+<!--     theme(legend.position = "bottom") -->
+<!-- ``` -->
 
 ## Mitochondrial gene expression and ribosomal protein expression across samples 
 - UMAP plots constructed from barcodes that were detected with EmptyDrops 
 - Each point represents a barcode and is colored based on its Mitochondrial/ Ribosomal percentage 
-```{r,  warning=FALSE, message=FALSE, echo=FALSE, fig.length = 2, fig.width=30}
-
+```{r, warning=FALSE, message=FALSE, echo=FALSE, fig.width=20, fig.height=10}
 merge_umap_with_metadata <- function(umap_data, metadata, sample) {
   umap_data |>
     dplyr::select(.cell, umap_1, umap_2) |>
@@ -367,6 +367,8 @@ plot_ribo <- ggplot(combined_umap_merged, aes(x = umap_1, y = umap_2, color = su
   labs(title = "Ribosomal Protein Expression", x = "UMAP1", y = "UMAP2") +
   theme_minimal() +
   facet_wrap(~ sample)
+
+# combined_plot <- grid.arrange(plot_mito, plot_ribo, ncol = 2)
 
 combined_plot <- plot_mito + plot_ribo
 
