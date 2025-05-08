@@ -2055,6 +2055,7 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 #' @param input_read_RNA_assay A SingleCellExperiment or Seurat object containing gene expression data
 #' @param empty_droplets_tbl Optional tibble identifying empty droplets to be filtered out
 #' @param alive_identification_tbl Optional tibble identifying dead cells to be filtered out
+#' @param doublet_identification_tbl A tibble from doublet identification.
 #' @param cell_type_tbl Optional tibble containing cell type information
 #' @param assay Character string specifying which assay to use
 #' @param cell_type_column Character string specifying the column name containing cell type annotations
@@ -2070,6 +2071,7 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 cell_communication <- function(input_read_RNA_assay,
                                empty_droplets_tbl = NULL,
                                alive_identification_tbl = NULL,
+                               doublet_identification_tbl = NULL,
                                cell_type_tbl = NULL,
                                assay = NULL,
                                cell_type_column = NULL,
@@ -2079,7 +2081,9 @@ cell_communication <- function(input_read_RNA_assay,
   if (input_read_RNA_assay |> is.null()) return(NULL)
   
   # CellChat identifyOverExpressedGenes() would only support at least 2 groups
-  if (cell_type_tbl |> distinct(.data[[cell_type_column]]) |> pull() |> length() == 1) return(NULL)
+  if (is.null(cell_type_tbl) ||
+      (cell_type_tbl |> filter(!is.na(.data[[cell_type_column]])) |> 
+       distinct(.data[[cell_type_column]]) |> pull() |> length() == 1)) return(NULL)
   
   # Get assay
   if(is.null(assay)) my_assay = input_read_RNA_assay@assays |> names() |> magrittr::extract2(1)
@@ -2100,9 +2104,16 @@ cell_communication <- function(input_read_RNA_assay,
   # Avoid dead cells
   if (!is.null(alive_identification_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |>
-      left_join(alive_identification_tbl) |>
+      left_join(alive_identification_tbl |> select(.cell, alive), by = ".cell") |>
       dplyr::filter(alive)
   } 
+  
+  # Avoid doublet
+  if (is.null(doublet_identification_tbl)) {
+    input_read_RNA_assay <- input_read_RNA_assay |> 
+      left_join(doublet_identification_tbl |> select(.cell, scDblFinder.class), by = ".cell") |>
+      filter(scDblFinder.class!="doublet") 
+  }
   
   # Append cell type
   if (!is.null(cell_type_tbl) && 
@@ -2143,7 +2154,7 @@ cell_communication <- function(input_read_RNA_assay,
   # Preprocessing
   # subset the expression data of signaling genes for saving computation cost. By default, feature=NULL means subsetting the expression data of signaling genes in CellChatDB.use
   cellchat <- subsetData(cellchat) # This step is necessary even if using the whole database
-  future::plan("multisession", workers = 4) # do parallel
+  #future::plan("multisession", workers = 4) # do parallel
   cellchat <- identifyOverExpressedGenes(cellchat)
   cellchat <- identifyOverExpressedInteractions(cellchat)
   

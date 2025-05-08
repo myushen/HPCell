@@ -8,6 +8,7 @@ cell_communication(
   input_read_RNA_assay,
   empty_droplets_tbl = NULL,
   alive_identification_tbl = NULL,
+  doublet_identification_tbl = NULL,
   cell_type_tbl = NULL,
   assay = NULL,
   cell_type_column = NULL,
@@ -21,6 +22,8 @@ cell_communication(
 \item{empty_droplets_tbl}{Optional tibble identifying empty droplets to be filtered out}
 
 \item{alive_identification_tbl}{Optional tibble identifying dead cells to be filtered out}
+
+\item{doublet_identification_tbl}{A tibble from doublet identification.}
 
 \item{cell_type_tbl}{Optional tibble containing cell type information}
 

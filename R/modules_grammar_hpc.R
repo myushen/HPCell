@@ -477,7 +477,8 @@ calculate_pseudobulk.HPCell = function(input_hpc, group_by = NULL, target_input 
 ligand_receptor_cellchat <- function(
     input_hpc, target_input = "data_object", target_output = "ligand_receptor_tbl",  
     target_empty_droplets = "empty_tbl",  target_alive_tbl = "alive_tbl", 
-    target_cell_type = "cell_type_concensus_tbl", group_by = "cell_type", ...
+    target_doublet_tbl = "doublet_tbl", target_cell_type = "cell_type_concensus_tbl", 
+    group_by = "cell_type", ...
 ) {
   UseMethod("ligand_receptor_cellchat")
 }
@@ -486,7 +487,7 @@ ligand_receptor_cellchat <- function(
 ligand_receptor_cellchat.HPCell = function(
     input_hpc, target_input = "data_object", target_output = "ligand_receptor_tbl", 
     target_empty_droplets = "empty_tbl", target_alive_tbl = "alive_tbl", 
-    target_cell_type = "cell_type_concensus_tbl",
+    target_doublet_tbl = "doublet_tbl", target_cell_type = "cell_type_concensus_tbl", 
     group_by = "cell_type", ...
 ) {
   
@@ -497,6 +498,7 @@ ligand_receptor_cellchat.HPCell = function(
       input_read_RNA_assay = target_input |> is_target(), 
       empty_droplets_tbl = target_empty_droplets |> is_target() ,
       alive_identification_tbl = target_alive_tbl |> is_target(),
+      doublet_identification_tbl = target_doublet_tbl |> is_target(),
       cell_type_tbl = target_cell_type |> is_target(),
       cell_type_column = group_by,
       feature_nomenclature = "gene_nomenclature" |> is_target(),
