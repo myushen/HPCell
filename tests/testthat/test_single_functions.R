@@ -704,6 +704,7 @@ input_hpc |>
     "subsets_Ribo_percent", 
     "G2M.Score"
   )) |> 
+
   hpc_report(
     "empty_report",
     rmd_path = system.file("rmd", "Empty_droptlet_report.qmd", package = "HPCell"),
@@ -711,7 +712,8 @@ input_hpc |>
     data_object = "data_object" |> is_target(),
     alive_tbl = "alive_tbl" |> is_target(),
     sample_name = "sample_names" |> is_target()
-  ) |>
+  ) 
+# |>
   hpc_report(
     "doublet_report",
     rmd_path = system.file("rmd", "Doublet_identification_report.qmd", package = "HPCell"),
