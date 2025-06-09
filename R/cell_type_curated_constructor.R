@@ -1,9 +1,10 @@
 # Define the generic function
 #' @export
 celltype_consensus_constructor <- function(input_hpc, 
-                                         target_input = "sce_transformed", 
+                                         target_input = "data_object", 
                                          target_output = "cell_type_concensus_tbl", 
                                          target_annotation = "annotation_tbl",
+                                         annotation_unified_names = c("azimuth", "blueprint", "monaco", "cellxgene"),
                                          celltype_unification_list = NULL,
                                          nonimmune_cellxgene = NULL,
                                          ...) {
@@ -14,9 +15,10 @@ celltype_consensus_constructor <- function(input_hpc,
 #' 
 #' @export
 celltype_consensus_constructor.HPCell <- function(input_hpc, 
-                                                target_input = "sce_transformed", 
+                                                target_input = "data_object", 
                                                 target_output = "cell_type_concensus_tbl",
                                                 target_annotation = "annotation_tbl",
+                                                annotation_unified_names = c("azimuth", "blueprint", "monaco", "cellxgene"),
                                                 ...) {
   
   input_hpc |> 
@@ -26,6 +28,7 @@ celltype_consensus_constructor.HPCell <- function(input_hpc,
       user_function = cell_type_ensembl_harmonised |> quote(),
       input_read_RNA_assay = target_input |> is_target(), 
       annotation_label_transfer_tbl = target_annotation |> is_target(),
+      available_maps = annotation_unified_names,
       ...
     )
 }
@@ -37,14 +40,16 @@ celltype_consensus_constructor.HPCell <- function(input_hpc,
 #' It uses a combination of transferred annotations and predefined maps to
 #' produce a consensus on cell type identities.
 #'
-#' @param input_read_RNA_assay A `SummarizedExperiment` object.
+#' @param input_read_RNA_assay SingleCellExperiment or Seurat object containing RNA assay data.
 #' @param annotation_label_transfer_tbl A tibble with annotation label transfer data.
 #' @param celltype_unification_maps A list containing mapping data frames for different sources
 #'             (e.g., Azimuth, Blueprint, Monaco, and cellxgene). Default is `NULL`.
 #'             If `NULL`, it retrieves default maps stored in HPCell.
 #' @param nonimmune A character vector specifying non-immune cell types.
 #'             Default is `NULL`. If `NULL`, it retrieves default non-immune types from HPCell.
-#'
+#' @param available_maps A character vector of cell type annotation sources to include in the ensemble annotation process.
+#'   Supported values include `"azimuth"`, `"blueprint"`, `"monaco"`, and `"cellxgene"`. 
+#'   By default, it uses all of the annotations.
 #' @return A tibble of the input SummarizedExperiment metadata enriched with unified cell type annotations
 #'         and additional classification details.
 #'         
@@ -56,7 +61,9 @@ celltype_consensus_constructor.HPCell <- function(input_hpc,
 cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
                                          annotation_label_transfer_tbl = NULL, 
                                          celltype_unification_maps = NULL, 
-                                         nonimmune = NULL) {
+                                         nonimmune = NULL,
+                                         available_maps = c("azimuth", "blueprint", "monaco", "cellxgene")
+                                         ) {
   
   # Handle missing input
   if (input_read_RNA_assay |> is.null()) return(NULL)
@@ -79,13 +86,27 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
     }
   }, silent = TRUE)
   
-  # Rename and unnest annotation_tbl
-  input_read_RNA_assay <- input_read_RNA_assay |>  SummarizedExperiment::colData() |> as.data.frame() |> 
-    rownames_to_column(var = ".cell") |> 
-    dplyr::rename(
-      blueprint_first_labels_fine = blueprint_first.labels.fine, 
-      monaco_first_labels_fine = monaco_first.labels.fine
-    ) 
+  # Get metadata 
+  if (inherits(input_read_RNA_assay, "Seurat")) {
+    input_read_RNA_assay <-  input_read_RNA_assay[[]] |> as.data.frame() |> 
+      rownames_to_column(var = ".cell") |> 
+      dplyr::rename(
+        blueprint_first_labels_fine = blueprint_first.labels.fine, 
+        blueprint_first_labels_coarse = blueprint_first.labels.coarse,
+        monaco_first_labels_fine = monaco_first.labels.fine,
+        monaco_first_labels_coarse = monaco_first.labels.coarse
+      ) 
+  } else if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
+    # Rename and unnest annotation_tbl
+    input_read_RNA_assay <- input_read_RNA_assay |>  SummarizedExperiment::colData() |> as.data.frame() |> 
+      rownames_to_column(var = ".cell") |> 
+      dplyr::rename(
+        blueprint_first_labels_fine = blueprint_first.labels.fine, 
+        blueprint_first_labels_coarse = blueprint_first.labels.coarse,
+        monaco_first_labels_fine = monaco_first.labels.fine,
+        monaco_first_labels_coarse = monaco_first.labels.coarse
+      ) 
+  }
   
   # Sometimes, sce does not have azimuth annotation
   input_read_RNA_assay <- input_read_RNA_assay |> 
@@ -93,41 +114,66 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
                                                   NA, 
                                                   azimuth_predicted.celltype.l2)) |>
     unnest(blueprint_scores_fine) |> 
-    select(.cell, observation_joinid,
-           observation_originalid,
-           donor_id, dataset_id, sample_id, cell_type,
-           blueprint_first_labels_fine, monaco_first_labels_fine, any_of("azimuth_predicted_celltype_l2"), monaco_scores_fine, contains("macro"), contains("CD4") ) |> 
+    select(.cell, any_of(c("observation_joinid", "observation_originalid",
+           "donor_id", "dataset_id", "sample_id", "cell_type")),
+           blueprint_first_labels_fine, monaco_first_labels_fine, 
+           blueprint_first_labels_coarse, monaco_first_labels_coarse,
+           any_of("azimuth_predicted_celltype_l2"), monaco_scores_fine, contains("macro"), contains("CD4") ) |> 
     unnest(monaco_scores_fine) |> 
-    select(.cell, observation_joinid,
-           observation_originalid,
-           donor_id, dataset_id, sample_id, cell_type,
-           blueprint_first_labels_fine, monaco_first_labels_fine, any_of("azimuth_predicted_celltype_l2"), contains("macro") , contains("CD4"), contains("helper"), contains("Th"))
+    select(.cell, any_of(c("observation_joinid", "observation_originalid",
+                           "donor_id", "dataset_id", "sample_id", "cell_type")),
+           blueprint_first_labels_fine, monaco_first_labels_fine, 
+           blueprint_first_labels_coarse, monaco_first_labels_coarse,
+           any_of("azimuth_predicted_celltype_l2"), contains("macro") , contains("CD4"), contains("helper"), contains("Th"))
+  
+  
+  # If cellxgene is available, calculate ensemble annotations accordingly
+  has_cellxgene <- "cellxgene" %in% available_maps
+  
+  # Set method weights depending on availability of cellxgene
+  if (has_cellxgene) {
+    method_weights <- c(1, 1, 1, 2)
+  } else {
+    method_weights <- c(1, 1, 1, 0)  # 0 weight for missing cellxgene
+  }
   
   # Unify cell types
   input_read_RNA_assay <- input_read_RNA_assay |>
     left_join(celltype_unification_maps$azimuth, copy = TRUE) |>
     left_join(celltype_unification_maps$blueprint,  copy = TRUE) |>
     left_join(celltype_unification_maps$monaco,  copy = TRUE) |>
-    left_join(celltype_unification_maps$cellxgene,  copy = TRUE) |>
-    mutate(ensemble_joinid = paste(azimuth, blueprint, monaco, cell_type_unified, sep = "_"))
+    mutate(ensemble_joinid = paste(azimuth, blueprint, monaco, sep = "_"))
+  
+  # Conditionally join cellxgene only if it exists
+  if ("cellxgene" %in% available_maps) input_read_RNA_assay <- input_read_RNA_assay |> 
+    left_join(celltype_unification_maps$cellxgene, copy = TRUE) |> 
+    mutate(ensemble_joinid = paste(ensemble_joinid, cell_type_unified, sep = "_"))
   
   # Produce the ensemble map
   df_map <- input_read_RNA_assay |>
-    dplyr::count(ensemble_joinid, azimuth, blueprint, monaco, cell_type_unified, name = "NCells") |>
+    dplyr::count(across(all_of(c("azimuth", "blueprint", "monaco", "cell_type_unified", "ensemble_joinid"))), name = "NCells") |>
     as_tibble() |>
-    mutate(
-      cellxgene = if_else(cell_type_unified %in% nonimmune_cellxgene, "non immune", 
-                          cell_type_unified),
+    mutate(cellxgene = if (has_cellxgene) {
+      if_else(cell_type_unified %in% nonimmune_cellxgene, "non immune", 
+              cell_type_unified)
+    } else {NA_character_},
       data_driven_ensemble = ensemble_annotation(cbind(azimuth, blueprint, monaco), 
                                                  override_celltype = c("non immune", "nkt", "mast")),
       cell_type_unified_ensemble = ensemble_annotation(cbind(azimuth, blueprint, monaco, cellxgene), 
-                                                       method_weights = c(1, 1, 1, 2), 
+                                                       method_weights = method_weights, 
                                                        override_celltype = c("non immune", "nkt", "mast")),
-      cell_type_unified_ensemble = case_when(
-        cell_type_unified_ensemble == "non immune" & cellxgene == "non immune" ~ cell_type_unified,
-        cell_type_unified_ensemble == "non immune" & cellxgene != "non immune" ~ "other",
-        TRUE ~ cell_type_unified_ensemble
-      ),
+      cell_type_unified_ensemble = if (has_cellxgene) {
+        case_when(
+          cell_type_unified_ensemble == "non immune" & cellxgene == "non immune" ~ cell_type_unified,
+          cell_type_unified_ensemble == "non immune" & cellxgene != "non immune" ~ "other",
+          TRUE ~ cell_type_unified_ensemble
+        )
+      } else {
+        case_when(
+          cell_type_unified_ensemble == "non immune" ~ "other",
+          TRUE ~ cell_type_unified_ensemble
+        )
+      },
       is_immune = !cell_type_unified_ensemble %in% nonimmune
     ) |>
     select(

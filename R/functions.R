@@ -185,16 +185,18 @@ empty_droplet_id <- function(input_read_RNA_assay,
 #' Identify Empty Droplets in Single-Cell RNA-seq Data
 #'
 #' @description
-#' `empty_droplet_threshold` distinguishes between empty and non-empty droplets by threshold. 
-#' It excludes mitochondrial and ribosomal genes, and filters input data
-#' based on defined values of `nCount_RNA` and `nFeature_RNA`
-#' The function returns a tibble containing RNA count, RNA feature count indicating whether cells are empty droplets.
+#' `empty_droplet_threshold` identifies empty droplets by applying a gene expression threshold per sample.
+#'   It excludes mitochondrial and ribosomal genes, and classifies droplets as empty if 
+#'   the number of expressed genes falls below the specified threshold.
+#'   
+#'   The function returns a tibble containing the number of expressed genes, 
+#'   total RNA count for each cell, and a logical annotation indicating whether the droplet was classified as empty.
 #'
 #' @param input_read_RNA_assay SingleCellExperiment or Seurat object containing RNA assay data.
 #' @param filter_empty_droplets Logical value indicating whether to filter the input data.
-#' @param RNA_feature_threshold An optional integer for the number of feature count. Default is 200
+#' @param RNA_feature_threshold An optional integer for the number of feature expressed in a sample.
 #'
-#' @return A tibble with columns: Cell, nFeature_RNA, empty_droplet (classification of droplets).
+#' @return A tibble with columns: Cell, nFeature_expressed_in_sample, nCount_RNA, empty_droplet (classification of droplets).
 #'
 #' @importFrom AnnotationDbi mapIds
 #' @importFrom stringr str_subset
@@ -210,7 +212,7 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
                                    total_RNA_count_check  = -Inf,
                                    assay = NULL,
                                    feature_nomenclature,
-                                   RNA_feature_threshold = 200){
+                                   RNA_feature_threshold = NULL){
   if(input_read_RNA_assay |> is.null()) return(NULL)
   if(ncol(input_read_RNA_assay) == 0) return(NULL)
   
@@ -221,12 +223,12 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
-  # Check if empty droplets have been identified
-  nFeature_name <- paste0("nFeature_", assay)
-  
-  filter_empty_droplets <- "TRUE"
-  
   significance_threshold = 0.001
+  
+  # Rule of thumb threshold
+  expressed_genes_threshold = 0.025
+  if (is.null(RNA_feature_threshold)) RNA_feature_threshold = min(floor(dim(input_read_RNA_assay)[1]*expressed_genes_threshold), 500)
+  
   # Genes to exclude
   if (feature_nomenclature == "symbol") {
     location <- mapIds(
@@ -258,10 +260,13 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
   }
   filtered_counts <- counts[!(rownames(counts) %in% c(mitochondrial_genes, ribosome_genes)),, drop=FALSE ]
   
-  # filter based on nCount_RNA and nFeature_RNA
-  result <- colSums(filtered_counts > 0 ) |> enframe(name = ".cell", value = "nFeature_RNA") |> 
-    #left_join(colSums(filtered_counts) |> enframe(name = ".cell", value = "nCount_RNA"), by = ".cell") |>
-    mutate(empty_droplet = nFeature_RNA < RNA_feature_threshold)
+  # Generate library size for each cell
+  library_size <- colSums(filtered_counts) |> enframe(name = ".cell", value = "nCount_RNA")
+  
+  # filter based on number of expressed genes
+  result <- colSums(filtered_counts > 0 ) |> enframe(name = ".cell", value = "nFeature_expressed_in_sample") |> 
+    left_join(library_size, by = ".cell") |>
+    mutate(empty_droplet = nFeature_expressed_in_sample < RNA_feature_threshold)
   
   # # Discard samples with nFeature_RNA density mode < threshold, avoid potential downstream error
   # density_est = result |> pull(nFeature_RNA) |> density()
@@ -349,13 +354,12 @@ annotation_label_transfer <- function(input_read_RNA_assay,
   
   # SingleR
   if (inherits(input_read_RNA_assay, "Seurat")) {
-    sce =
+    input_read_RNA_assay =
       input_read_RNA_assay |>
       as.SingleCellExperiment() |>
-      logNormCounts(assay.type = assay)
+      logNormCounts()
   } else if (inherits(input_read_RNA_assay, "SingleCellExperiment")){
-    sce =
-      # Filter empty
+    input_read_RNA_assay =
       input_read_RNA_assay|>
       logNormCounts(assay.type = assay)
   }
@@ -465,6 +469,8 @@ annotation_label_transfer <- function(input_read_RNA_assay,
     
     # Convert SCE to SE to calculate SCT
     if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
+      
+      assay = input_read_RNA_assay@assays |> names() |> extract2(1)
       
       assay(input_read_RNA_assay, assay) <- 
         assay(input_read_RNA_assay, assay) |> 
@@ -2048,7 +2054,6 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
     ))
   
 }
-
 
 #' Test Differential Abundance in SummarizedExperiment Object
 #'

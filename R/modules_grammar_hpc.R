@@ -340,12 +340,14 @@ remove_doublets_scDblFinder.HPCell = function(
 
 # Define the generic function
 #' @export
-annotate_cell_type <- function(input_hpc, azimuth_reference = NULL, target_input = "data_object", target_output = "annotation_tbl",...) {
+annotate_cell_type <- function(input_hpc, azimuth_reference = NULL, target_input = "data_object", 
+                               target_output = "annotation_tbl", target_empty_droplets = "empty_tbl", ...) {
   UseMethod("annotate_cell_type")
 }
 
 #' @export
-annotate_cell_type.HPCell = function(input_hpc, azimuth_reference = NULL, target_input = "data_object", target_output = "annotation_tbl", ...) {
+annotate_cell_type.HPCell = function(input_hpc, azimuth_reference = NULL, target_input = "data_object", 
+                                     target_output = "annotation_tbl", target_empty_droplets = "empty_tbl", ...) {
   
 
   input_hpc |> 
@@ -354,7 +356,7 @@ annotate_cell_type.HPCell = function(input_hpc, azimuth_reference = NULL, target
       target_output = target_output, 
       user_function = annotation_label_transfer |> quote() , 
       input_read_RNA_assay = target_input |> is_target(), 
-      empty_droplets_tbl = "empty_tbl" |> is_target() ,
+      empty_droplets_tbl = target_empty_droplets |> safe_as_name() ,
       reference_azimuth = azimuth_reference,
       feature_nomenclature = "gene_nomenclature" |> is_target() 
     )

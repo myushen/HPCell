@@ -8,11 +8,12 @@ cell_type_ensembl_harmonised(
   input_read_RNA_assay,
   annotation_label_transfer_tbl = NULL,
   celltype_unification_maps = NULL,
-  nonimmune = NULL
+  nonimmune = NULL,
+  available_maps = c("azimuth", "blueprint", "monaco", "cellxgene")
 )
 }
 \arguments{
-\item{input_read_RNA_assay}{A \code{SummarizedExperiment} object.}
+\item{input_read_RNA_assay}{SingleCellExperiment or Seurat object containing RNA assay data.}
 
 \item{annotation_label_transfer_tbl}{A tibble with annotation label transfer data.}
 
@@ -22,6 +23,10 @@ If \code{NULL}, it retrieves default maps stored in HPCell.}
 
 \item{nonimmune}{A character vector specifying non-immune cell types.
 Default is \code{NULL}. If \code{NULL}, it retrieves default non-immune types from HPCell.}
+
+\item{available_maps}{A character vector of cell type annotation sources to include in the ensemble annotation process.
+Supported values include \code{"azimuth"}, \code{"blueprint"}, \code{"monaco"}, and \code{"cellxgene"}.
+By default, it uses all of the annotations.}
 }
 \value{
 A tibble of the input SummarizedExperiment metadata enriched with unified cell type annotations
