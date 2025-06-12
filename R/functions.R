@@ -1121,6 +1121,12 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
   # Your code for non_batch_variation_removal function here
   class_input = input_read_RNA_assay |> class()
   
+  # For small number of cells
+  if (ncol(input_read_RNA_assay) < 10) {
+    k.knn = ncol(input_read_RNA_assay) - 1
+    n.pc = ncol(input_read_RNA_assay) - 1
+  }
+  
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> magrittr::extract2(1)
   
@@ -1238,7 +1244,7 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
       stats::prcomp(normalized_rna.for.pca, rank. = max(n.pc), scale. = FALSE, center = FALSE)
     }, error = function(e) {
       # Print error message
-      cat("Error in PCA computation: ", e$message, "\nUpdating data and retrying...\n")
+      cat("Error in PCA computation: ", e$message, "\nExcluding zero variance and retrying...\n")
       
       # Update normalized_rna.for.pca to exclude columns with zero variance
       normalized_rna.for.pca <- normalized_rna.for.pca[, apply(normalized_rna.for.pca, 2, var) != 0]
