@@ -11,7 +11,7 @@ split_sample_cell_type_calculate_metacell_membership(
   alive_identification_tbl = NULL,
   doublet_identification_tbl = NULL,
   x = "cell_type",
-  min_cells_per_metacell = 30
+  min_cells_per_metacell = NULL
 )
 }
 \arguments{

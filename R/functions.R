@@ -1127,6 +1127,12 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
   # Your code for non_batch_variation_removal function here
   class_input = input_read_RNA_assay |> class()
   
+  # For small number of cells
+  if (ncol(input_read_RNA_assay) < 10) {
+    k.knn = ncol(input_read_RNA_assay) - 1
+    n.pc = ncol(input_read_RNA_assay) - 1
+  }
+  
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> magrittr::extract2(1)
   
@@ -1244,7 +1250,7 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
       stats::prcomp(normalized_rna.for.pca, rank. = max(n.pc), scale. = FALSE, center = FALSE)
     }, error = function(e) {
       # Print error message
-      cat("Error in PCA computation: ", e$message, "\nUpdating data and retrying...\n")
+      cat("Error in PCA computation: ", e$message, "\nExcluding zero variance and retrying...\n")
       
       # Update normalized_rna.for.pca to exclude columns with zero variance
       normalized_rna.for.pca <- normalized_rna.for.pca[, apply(normalized_rna.for.pca, 2, var) != 0]
@@ -1515,7 +1521,7 @@ postprocess_SCimplify <- function(preprocessed,
 #' @param cell_count Integer, the total number of cells.
 #' @param min_cells_per_metacell Integer, the minimum number of cells allowed per metacell. Defaults to 30.
 #' @return An Integer vector of viable gamma values. If no viable gamma values are found, returns 0.
-calculate_gamma <- function(cell_count, min_cells_per_metacell = 30) {
+calculate_gamma <- function(cell_count, min_cells_per_metacell = 1) {
   gamma = 2
   gamma_values <- integer()
   while (cell_count / gamma >= min_cells_per_metacell) {
@@ -1544,7 +1550,7 @@ calculate_gamma <- function(cell_count, min_cells_per_metacell = 30) {
 #' # Assume 'sce' is a SingleCellExperiment object with a cell type
 #' calculate_metacell(sce)
 calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce,
-                                                          min_cells_per_metacell) {
+                                                          min_cells_per_metacell = 1) {
   # Preprocess the single-cell data
   preprocessed_sce = sample_sce |> preprocess_SCimplify()
   
@@ -1583,7 +1589,7 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
                                                                  alive_identification_tbl = NULL,
                                                                  doublet_identification_tbl = NULL,
                                                                  x="cell_type",
-                                                                 min_cells_per_metacell = 30) {
+                                                                 min_cells_per_metacell = NULL) {
   
   if (sample_sce |> is.null()) return(NULL)
   
@@ -1619,15 +1625,20 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
   # In rare cases, all cells in a sample are from empty droplets or dead or doublets
   if (ncol(sample_sce) == 0) return(NULL)
   
-  # In rare cases, only one cell in a sample is left
-  if (ncol(sample_sce) == 1) sample_sce = sample_sce |> duplicate_single_column_assay()
+  # # In rare cases, only one cell in a sample is left
+  # if (ncol(sample_sce) == 1) sample_sce = sample_sce |> duplicate_single_column_assay()
   
   metacell_gamma_membership_tibble <- sample_sce |> left_join(cell_type_tbl) |> 
     dplyr::group_split(!!sym(x)) |>
-    # By deault, calculate metacell only if sample cell_count >=60 as starting from gamma2. In this case,
-    #   for sample cell_count less than 30 after splitting, it's not meaningful to construct metacell. 
-    purrr::map( ~ if (ncol(.x) >= min_cells_per_metacell*2) {
-      calculate_metacell_for_a_sample_per_cell_type(.x, min_cells_per_metacell)} else return(NULL)) |> 
+    # We need to include all good quality single cells in metacell. 
+    # For those cells that cant be halved further, mark metacell_2 to 1
+    purrr::map( ~ if (ncol(.x) <= 2) {
+       .x |> 
+        SummarizedExperiment::colData() |> as.data.frame() |> tibble::rownames_to_column("cell") |> 
+        select(cell) |> mutate(gamma2 = 1) |> as_tibble()
+      } else if (ncol(.x) >2) {~calculate_metacell_for_a_sample_per_cell_type(.x)}) |>
+  
+      # calculate_metacell_for_a_sample_per_cell_type(.x, min_cells_per_metacell)} else return(NULL)) |> 
     bind_rows()
   
   metacell_gamma_membership_tibble

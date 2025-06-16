@@ -6,7 +6,7 @@
 \usage{
 calculate_metacell_for_a_sample_per_cell_type(
   sample_sce,
-  min_cells_per_metacell
+  min_cells_per_metacell = 1
 )
 }
 \arguments{

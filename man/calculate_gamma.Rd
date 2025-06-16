@@ -4,7 +4,7 @@
 \alias{calculate_gamma}
 \title{Calculate Appropriate Gamma Values for Metacell Analysis}
 \usage{
-calculate_gamma(cell_count, min_cells_per_metacell = 30)
+calculate_gamma(cell_count, min_cells_per_metacell = 1)
 }
 \arguments{
 \item{cell_count}{Integer, the total number of cells.}
