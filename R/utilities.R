@@ -2978,3 +2978,46 @@ clean_sce_metadata <- function(sce) {
   sce <- sce |> select(where(~ any(!is.na(.))))
   sce
 }
+
+#' @export
+computeCommunProbPathway <- function(object = NULL, net = NULL, pairLR.use = NULL, thresh = 0.05) {
+  if (is.null(net)) {
+    net <- object@net
+  }
+  if (is.null(pairLR.use)) {
+    pairLR.use <- object@LR$LRsig
+  }
+  prob <- net$prob
+  prob[net$pval > thresh] <- 0
+  
+  LR <- dimnames(prob)[[3]]
+  LR.sig <- LR[apply(prob, 3, sum) != 0]
+  
+  pathways <- unique(pairLR.use$pathway_name)
+  group <- factor(pairLR.use$pathway_name, levels = pathways)
+  
+  # STEFANO FIX
+  if(length(levels(group))==1){
+    xx = apply(prob, c(1, 2), by, group, sum)
+    prob.pathways = xx |> array(dim = c(nrow(xx), ncol(xx), 1), dimnames = list(rownames(xx), colnames(xx), levels(group)))
+  }
+  else
+    prob.pathways <- aperm(apply(prob, c(1, 2), by, group, sum),
+                           c(2, 3, 1))
+  
+  pathways.sig <- pathways[apply(prob.pathways, 3, sum) != 0]
+  prob.pathways.sig <- prob.pathways[,,pathways.sig, drop = FALSE]
+  idx <- sort(apply(prob.pathways.sig, 3, sum), decreasing=TRUE, index.return = TRUE)$ix
+  pathways.sig <- pathways.sig[idx]
+  prob.pathways.sig <- prob.pathways.sig[, , idx]
+  
+  if (is.null(object)) {
+    netP = list(pathways = pathways.sig, prob = prob.pathways.sig)
+    return(netP)
+  } else {
+    object@net$LRs <- LR.sig
+    object@netP$pathways <- pathways.sig
+    object@netP$prob <- prob.pathways.sig
+    return(object)
+  }
+}

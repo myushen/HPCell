@@ -2061,8 +2061,8 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 #' @param input_read_RNA_assay A SingleCellExperiment or Seurat object containing gene expression data
 #' @param empty_droplets_tbl Optional tibble identifying empty droplets to be filtered out
 #' @param alive_identification_tbl Optional tibble identifying dead cells to be filtered out
-#' @param doublet_identification_tbl A tibble from doublet identification.
-#' @param cell_type_tbl Optional tibble containing cell type information
+#' @param doublet_identification_tbl Optional A tibble from doublet identification.
+#' @param cell_type_tbl Optional A tibble containing cell, cell type, and sample_id information
 #' @param assay Character string specifying which assay to use
 #' @param cell_type_column Character string specifying the column name containing cell type annotations
 #' @param feature_nomenclature Character vector specifying gene in Symbol or Ensemble format
@@ -2071,6 +2071,7 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 #'     ligands/receptors
 #' @importFrom CellChat createCellChat subsetDB subsetData identifyOverExpressedGenes 
 #'   identifyOverExpressedInteractions computeCommunProb filterCommunication subsetCommunication
+#'   normalizeData smoothData aggregateNet setIdent
 #' @importFrom tibble as_tibble
 #' @importFrom dplyr filter mutate
 #' @export
@@ -2084,12 +2085,8 @@ cell_communication <- function(input_read_RNA_assay,
                                feature_nomenclature,
                                ...){
   
-  if (input_read_RNA_assay |> is.null()) return(NULL)
-  
-  # CellChat identifyOverExpressedGenes() would only support at least 2 groups
-  if (is.null(cell_type_tbl) ||
-      (cell_type_tbl |> filter(!is.na(.data[[cell_type_column]])) |> 
-       distinct(.data[[cell_type_column]]) |> pull() |> length() == 1)) return(NULL)
+  # Input should not be NULL
+  if (is.null(input_read_RNA_assay)) return(NULL)
   
   # Get assay
   if(is.null(assay)) my_assay = input_read_RNA_assay@assays |> names() |> magrittr::extract2(1)
@@ -2115,7 +2112,7 @@ cell_communication <- function(input_read_RNA_assay,
   } 
   
   # Avoid doublet
-  if (is.null(doublet_identification_tbl)) {
+  if (!is.null(doublet_identification_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |> 
       left_join(doublet_identification_tbl |> select(.cell, scDblFinder.class), by = ".cell") |>
       filter(scDblFinder.class!="doublet") 
@@ -2126,10 +2123,10 @@ cell_communication <- function(input_read_RNA_assay,
       cell_type_column %in% colnames(cell_type_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |>
       left_join(cell_type_tbl) |> 
-      select(everything(), !!cell_type_column)
-  } else if (!is.null(cell_type_tbl) && 
-             !cell_type_column %in% colnames(cell_type_tbl))
-    stop ("HPCell says: Your `cell_type_column` does not present in `cell_type_tbl` data")
+      select(everything(), !!cell_type_column) |> 
+      filter(!is.na(.data[[cell_type_column]]))
+  } else if (!is.null(cell_type_tbl) && !cell_type_column %in% colnames(cell_type_tbl))
+      stop ("HPCell says: Your `cell_type_column` does not present in `cell_type_tbl` data")
   
   # Note: CellChat only takes gene symbols as input, thus conversion step is required for ensemble IDs
   if (feature_nomenclature == "ensembl") {
@@ -2141,34 +2138,51 @@ cell_communication <- function(input_read_RNA_assay,
     rownames(input_read_RNA_assay) = gene_map$gene_name
   }
   
-  # Remove NA cell_type 
-  input_read_RNA_assay = input_read_RNA_assay |> filter(!is.na(.data[[cell_type_column]]))
-  # Construct cellchat object
   if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
-    cellchat = createCellChat(object = input_read_RNA_assay, group.by = cell_type_column, assay = my_assay)
-    }
-  else if (inherits(input_read_RNA_assay, "Seurat")){
-    cellchat = createCellChat(object = input_read_RNA_assay, group.by = cell_type_column, assay = my_assay)
+    counts = input_read_RNA_assay |> assay(my_assay)
+    meta = input_read_RNA_assay |> colData() |> as.data.frame() |> mutate(samples = sample_id)
+  } else if (inherits(input_read_RNA_assay, "Seurat")){
+    counts = GetAssayData(input_read_RNA_assay, assay = my_assay) 
+    meta = input_read_RNA_assay[[]] |>  mutate(samples = sample_id)
   }
+  
+  if (meta |> nrow() == 0) return(NULL)
+  
+  # CellChat identifyOverExpressedGenes() would only support at least 2 groups
+  if (meta |> distinct(.data[[cell_type_column]]) |> pull() |> length() <= 1) return(NULL)
+
   
   CellChatDB <- CellChatDB.human
   
-  # Giving users option to choose the communication annotation 
-  CellChatDB.use <- subsetDB(CellChatDB, key = "annotation", ...)
+  CellChatDB.use <- subsetDB(CellChatDB, search =c("Secreted Signaling","ECM-Receptor","Cell-Cell Contact"), key = c("annotation")) 
+  
+  # CellChat Only Takes log-Normalized data
+  cellchat = counts |> 
+    as("dgCMatrix") |> 
+    normalizeData(do.log = TRUE) |>
+    createCellChat(group.by = cell_type_column, meta = meta, assay = my_assay)
+  
   cellchat@DB <- CellChatDB.use
   
   # Preprocessing
-  # subset the expression data of signaling genes for saving computation cost. By default, feature=NULL means subsetting the expression data of signaling genes in CellChatDB.use
-  cellchat <- subsetData(cellchat) # This step is necessary even if using the whole database
-  #future::plan("multisession", workers = 4) # do parallel
-  cellchat <- identifyOverExpressedGenes(cellchat)
-  cellchat <- identifyOverExpressedInteractions(cellchat)
+  cellchat  = cellchat |> 
+    subsetData() |> 
+    identifyOverExpressedGenes() |> 
+    identifyOverExpressedInteractions() |> 
+    smoothData(adj = CellChat::PPI.human)
   
-  # Compute the communication probability and infer cellular communication network
-  cellchat <- computeCommunProb(cellchat, type = "triMean")
-  
-  # Filter the number of cells in each group are less than 10
-  cellchat <- filterCommunication(cellchat, min.cells = 10)
+  # Return NULL when none of LR pairs are found
+  if (nrow(cellchat@LR$LRsig) == 0) return(NULL)
+    
+  cellchat = cellchat |> 
+    
+    # Use projected data
+    computeCommunProb(raw.use = FALSE) |> 
+    
+    # Filter the number of cells in each group are less than 10
+    filterCommunication(min.cells = 10) |> 
+    computeCommunProbPathway() |>
+    aggregateNet()
   
   gc()
   
@@ -2176,7 +2190,7 @@ cell_communication <- function(input_read_RNA_assay,
   # By default, slot.name = "net" extracts the inferred communication at the level of ligands/receptors
   # Set slot.name = "netP" to access the the inferred communications at the level of signaling pathways
   # If all arguments are NULL, it returns a data frame consisting of all the inferred cell-cell communications
-  cell_communication_tbl <- tryCatch(
+  ligand_receptor_tbl <- tryCatch(
     subsetCommunication(cellchat),
     error = function(e) {
       message("Error in subsetCommunication(): ", e$message)
@@ -2184,14 +2198,15 @@ cell_communication <- function(input_read_RNA_assay,
     }
   )
   
-  if (!is.null(cell_communication_tbl)) {
-    cell_communication_tbl |>
-      mutate(sample_id = as.character(unique(cell_type_tbl$sample_id))) |>
-      # # In this case, we want to see the communication between the matched source and target cell types
-      # filter(source == target) |>
-      as_tibble()
-  } else {NULL}
+  cell_interaction_count = cellchat@net$count |> as_tibble(rownames = "source") |>
+    pivot_longer(-source, names_to = "target", values_to = "interaction_count") 
   
+  cell_interaction_weight =  cellchat@net$weight |> as_tibble(rownames = "source") |>
+    pivot_longer(-source, names_to = "target", values_to = "interaction_weight")
+  
+  ligand_receptor_tbl |>
+      mutate(sample_id = unique(cellchat@meta$sample_id)) |>
+      as_tibble() |> left_join(cell_interaction_count) |> left_join(cell_interaction_weight)
 }
 
 

@@ -23,9 +23,9 @@ cell_communication(
 
 \item{alive_identification_tbl}{Optional tibble identifying dead cells to be filtered out}
 
-\item{doublet_identification_tbl}{A tibble from doublet identification.}
+\item{doublet_identification_tbl}{Optional A tibble from doublet identification.}
 
-\item{cell_type_tbl}{Optional tibble containing cell type information}
+\item{cell_type_tbl}{Optional A tibble containing cell, cell type, and sample_id information}
 
 \item{assay}{Character string specifying which assay to use}
 
