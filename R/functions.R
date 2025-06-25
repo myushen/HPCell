@@ -2190,13 +2190,26 @@ cell_communication <- function(input_read_RNA_assay,
   # By default, slot.name = "net" extracts the inferred communication at the level of ligands/receptors
   # Set slot.name = "netP" to access the the inferred communications at the level of signaling pathways
   # If all arguments are NULL, it returns a data frame consisting of all the inferred cell-cell communications
-  ligand_receptor_tbl <- tryCatch(
-    subsetCommunication(cellchat),
+  lr_tbl <- tryCatch(
+    subsetCommunication(cellchat, slot.name = "net", thresh = NULL) |> 
+      dplyr::rename(lr_prob = prob,
+                    lr_pval = pval),
     error = function(e) {
       message("Error in subsetCommunication(): ", e$message)
       return(NULL)
     }
   )
+  
+  pathway_tbl <- tryCatch(
+    subsetCommunication(cellchat, slot.name = "netP", thresh = NULL) |> 
+      dplyr::rename(pathway_prob = prob,
+                    pathway_pval = pval),
+    error = function(e) {
+      message("Error in subsetCommunication(): ", e$message)
+      return(NULL)
+    }
+  )
+  
   
   cell_interaction_count = cellchat@net$count |> as_tibble(rownames = "source") |>
     pivot_longer(-source, names_to = "target", values_to = "interaction_count") 
@@ -2204,9 +2217,10 @@ cell_communication <- function(input_read_RNA_assay,
   cell_interaction_weight =  cellchat@net$weight |> as_tibble(rownames = "source") |>
     pivot_longer(-source, names_to = "target", values_to = "interaction_weight")
   
-  ligand_receptor_tbl |>
+  result = lr_tbl |> left_join(pathway_tbl,  by = c("source", "target", "pathway_name")) |>
       mutate(sample_id = unique(cellchat@meta$sample_id)) |>
-      as_tibble() |> left_join(cell_interaction_count) |> left_join(cell_interaction_weight)
+      left_join(cell_interaction_count) |> left_join(cell_interaction_weight) |>
+      as_tibble()
 }
 
 
