@@ -9,7 +9,7 @@ empty_droplet_threshold(
   total_RNA_count_check = -Inf,
   assay = NULL,
   feature_nomenclature,
-  RNA_feature_threshold = NULL
+  RNA_feature_threshold
 )
 }
 \arguments{

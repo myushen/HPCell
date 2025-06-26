@@ -209,7 +209,7 @@ remove_empty_DropletUtils.HPCell = function(input_hpc, total_RNA_count_check = N
 }
 
 #' @export
-remove_empty_threshold <- function(input_hpc, RNA_feature_threshold = NULL, target_input = "data_object", target_output = "empty_tbl", ...) {
+remove_empty_threshold <- function(input_hpc, RNA_feature_threshold = input_hpc$initialisation$input_hpc |> map(~200), target_input = "data_object", target_output = "empty_tbl", ...) {
   UseMethod("remove_empty_threshold")
 }
 
@@ -228,14 +228,26 @@ remove_empty_threshold.Seurat = function(input_hpc, RNA_feature_threshold = NULL
 }
 
 #' @export
-remove_empty_threshold.HPCell = function(input_hpc, RNA_feature_threshold = NULL, target_input = "data_object", target_output = "empty_tbl",...) {
+remove_empty_threshold.HPCell = function(input_hpc,  RNA_feature_threshold = input_hpc$initialisation$input_hpc |> map(~200),
+                                         target_input = "data_object", target_output = "empty_tbl",...) {
+  
+  RNA_feature_threshold |> saveRDS("RNA_feature_thresh.rds")
   
   input_hpc |> 
+    
+    # Track the file
+    hpc_single("RNA_feature_thresh_file", "RNA_feature_thresh.rds", format = "file") |> 
+    hpc_iterate(
+      target_output = "RNA_feature_thresh", 
+      user_function = readRDS |> quote() ,
+      file = "RNA_feature_thresh_file" |> is_target() 
+    ) |>
+    
     hpc_iterate(
       target_output = target_output, 
       user_function = empty_droplet_threshold |> quote() , 
       input_read_RNA_assay = target_input |> is_target(),
-      RNA_feature_threshold = RNA_feature_threshold,
+      RNA_feature_threshold = "RNA_feature_thresh" |> is_target(),
       feature_nomenclature = "gene_nomenclature" |> is_target()
     )
   

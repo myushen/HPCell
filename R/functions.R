@@ -212,7 +212,7 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
                                    total_RNA_count_check  = -Inf,
                                    assay = NULL,
                                    feature_nomenclature,
-                                   RNA_feature_threshold = NULL){
+                                   RNA_feature_threshold){
   if(input_read_RNA_assay |> is.null()) return(NULL)
   if(ncol(input_read_RNA_assay) == 0) return(NULL)
   
@@ -225,10 +225,10 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
   
   significance_threshold = 0.001
   
-  # Rule of thumb threshold
-  expressed_genes_threshold = 0.025
-  if (is.null(RNA_feature_threshold)) RNA_feature_threshold = min(floor(dim(input_read_RNA_assay)[1]*expressed_genes_threshold), 500)
-  
+  # # Rule of thumb threshold
+  # expressed_genes_threshold = 0.025
+  # if (is.null(RNA_feature_threshold)) RNA_feature_threshold = min(floor(dim(input_read_RNA_assay)[1]*expressed_genes_threshold), 500)
+  # 
   # Genes to exclude
   if (feature_nomenclature == "symbol") {
     location <- mapIds(
