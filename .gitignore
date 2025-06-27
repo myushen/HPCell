@@ -19,6 +19,7 @@ data_container_type.rds
 sample_names.rds
 temp_fx.rds
 temp_gene_nomenclature.rds
+RNA_feature_thresh.rds
 # Exclude pipeline and scripts directories and files
 pipeline_store
 pipeline_store.R
