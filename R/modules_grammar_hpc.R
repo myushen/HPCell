@@ -492,8 +492,7 @@ ligand_receptor_cellchat <- function(
     input_hpc, target_input = "data_object", target_output = "ligand_receptor_tbl",  
     target_empty_droplets = "empty_tbl",  target_alive_tbl = "alive_tbl", 
     target_doublet_tbl = "doublet_tbl", target_cell_type = "cell_type_concensus_tbl", 
-    group_by = "cell_type", ...
-) {
+    species_db = "human", group_by = "cell_type", ...) {
   UseMethod("ligand_receptor_cellchat")
 }
 
@@ -502,8 +501,7 @@ ligand_receptor_cellchat.HPCell = function(
     input_hpc, target_input = "data_object", target_output = "ligand_receptor_tbl", 
     target_empty_droplets = "empty_tbl", target_alive_tbl = "alive_tbl", 
     target_doublet_tbl = "doublet_tbl", target_cell_type = "cell_type_concensus_tbl", 
-    group_by = "cell_type", ...
-) {
+    species_db = "human", group_by = "cell_type", ...) {
   
   input_hpc |> 
     hpc_iterate(
@@ -516,6 +514,7 @@ ligand_receptor_cellchat.HPCell = function(
       cell_type_tbl = target_cell_type |> is_target(),
       cell_type_column = group_by,
       feature_nomenclature = "gene_nomenclature" |> is_target(),
+      reference_db = species_db,
       ...
     )
   

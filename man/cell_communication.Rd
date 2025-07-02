@@ -13,6 +13,7 @@ cell_communication(
   assay = NULL,
   cell_type_column = NULL,
   feature_nomenclature,
+  reference_db = "human",
   ...
 )
 }
@@ -32,6 +33,8 @@ cell_communication(
 \item{cell_type_column}{Character string specifying the column name containing cell type annotations}
 
 \item{feature_nomenclature}{Character vector specifying gene in Symbol or Ensemble format}
+
+\item{reference_db}{The ligand-receptor interaction database curated in CellChat tool. Choose between human or mouse.}
 
 \item{...}{Additional arguments passed to \code{CellChat::subsetDB}}
 }

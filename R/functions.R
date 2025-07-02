@@ -726,13 +726,13 @@ alive_identification <- function(input_read_RNA_assay,
       
       mitochondrion <- 
         qc_metrics %>%
-        left_join(input_read_RNA_assay |> select(.cell, all_of(cell_type_column)), by = ".cell") 
+        left_join(input_read_RNA_assay |> as_tibble() |> select(.cell, all_of(cell_type_column)), by = ".cell") 
       
       
       ribosome = 
         ribosome |>
         # Only retrieve metadata so nesting in the next step won't break
-        left_join(input_read_RNA_assay |> select(.cell, all_of(cell_type_column)), by = ".cell") |> as_tibble()
+        left_join(input_read_RNA_assay |> as_tibble() |> select(.cell, all_of(cell_type_column)), by = ".cell") |> as_tibble()
         
     }
     
@@ -774,12 +774,11 @@ alive_identification <- function(input_read_RNA_assay,
   
   # Merge
   mitochondrion |>
-    left_join(ribosome, by=".cell") |>
+    left_join(ribosome) |>
     mutate(alive = !high_mitochondrion) |> # & !high_ribosome ) |>
   # Select informative columns
-    select(cell_type_unified_ensemble = cell_type_unified_ensemble.x,
-           .cell, contains("subsets"), contains("observation"),
-           donor_id, dataset_id, sample_id, contains("high"), alive)
+    select(.cell, {{cell_type_column}}, contains("subsets"), contains("observation"),
+           contains("high"), alive)
 }
 
 
@@ -1636,7 +1635,7 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
        .x |> 
         SummarizedExperiment::colData() |> as.data.frame() |> tibble::rownames_to_column("cell") |> 
         select(cell) |> mutate(gamma2 = 1) |> as_tibble()
-      } else if (ncol(.x) >2) {~calculate_metacell_for_a_sample_per_cell_type(.x)}) |>
+      } else if (ncol(.x) >2) {calculate_metacell_for_a_sample_per_cell_type(.x)}) |>
   
       # calculate_metacell_for_a_sample_per_cell_type(.x, min_cells_per_metacell)} else return(NULL)) |> 
     bind_rows()
@@ -2077,6 +2076,7 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 #' @param assay Character string specifying which assay to use
 #' @param cell_type_column Character string specifying the column name containing cell type annotations
 #' @param feature_nomenclature Character vector specifying gene in Symbol or Ensemble format
+#' @param reference_db The ligand-receptor interaction database curated in CellChat tool. Choose between human or mouse.
 #' @param ... Additional arguments passed to \code{CellChat::subsetDB}
 #' @return A CellChat tibble containing the inferred communication at the level of 
 #'     ligands/receptors
@@ -2094,6 +2094,7 @@ cell_communication <- function(input_read_RNA_assay,
                                assay = NULL,
                                cell_type_column = NULL,
                                feature_nomenclature,
+                               reference_db = "human",
                                ...){
   
   # Input should not be NULL
@@ -2151,10 +2152,10 @@ cell_communication <- function(input_read_RNA_assay,
   
   if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
     counts = input_read_RNA_assay |> assay(my_assay)
-    meta = input_read_RNA_assay |> colData() |> as.data.frame() |> mutate(samples = sample_id)
+    meta = input_read_RNA_assay |> colData() |> as.data.frame()
   } else if (inherits(input_read_RNA_assay, "Seurat")){
     counts = GetAssayData(input_read_RNA_assay, assay = my_assay) 
-    meta = input_read_RNA_assay[[]] |>  mutate(samples = sample_id)
+    meta = input_read_RNA_assay[[]]
   }
   
   if (meta |> nrow() == 0) return(NULL)
@@ -2162,8 +2163,11 @@ cell_communication <- function(input_read_RNA_assay,
   # CellChat identifyOverExpressedGenes() would only support at least 2 groups
   if (meta |> distinct(.data[[cell_type_column]]) |> pull() |> length() <= 1) return(NULL)
 
-  
-  CellChatDB <- CellChatDB.human
+  # Choose cellchat reference
+  DB <- switch(reference_db, human = CellChat::CellChatDB.human, mouse = CellChat::CellChatDB.mouse)
+  projectionDB <- switch(reference_db, human = CellChat::PPI.human, mouse = CellChat::PPI.mouse)
+    
+  CellChatDB <- DB
   
   CellChatDB.use <- subsetDB(CellChatDB, search =c("Secreted Signaling","ECM-Receptor","Cell-Cell Contact"), key = c("annotation")) 
   
@@ -2180,7 +2184,7 @@ cell_communication <- function(input_read_RNA_assay,
     subsetData() |> 
     identifyOverExpressedGenes() |> 
     identifyOverExpressedInteractions() |> 
-    smoothData(adj = CellChat::PPI.human)
+    smoothData(adj = projectionDB)
   
   # Return NULL when none of LR pairs are found
   if (nrow(cellchat@LR$LRsig) == 0) return(NULL)
@@ -2221,6 +2225,7 @@ cell_communication <- function(input_read_RNA_assay,
     }
   )
   
+  if (nrow(lr_tbl) == 0 || is.null(lr_tbl)) return(NULL)
   
   cell_interaction_count = cellchat@net$count |> as_tibble(rownames = "source") |>
     pivot_longer(-source, names_to = "target", values_to = "interaction_count") 
