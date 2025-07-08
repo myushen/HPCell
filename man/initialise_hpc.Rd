@@ -17,7 +17,8 @@ initialise_hpc(
   error = NULL,
   update = "thorough",
   garbage_collection = 0,
-  workspace_on_error = FALSE
+  workspace_on_error = FALSE,
+  species = "human"
 )
 }
 \arguments{

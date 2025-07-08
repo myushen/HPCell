@@ -4,7 +4,7 @@
 \alias{convert_gene_names}
 \title{Gene name conversion using ensembl database}
 \usage{
-convert_gene_names(id, current_nomenclature)
+convert_gene_names(id, current_nomenclature, species)
 }
 \arguments{
 \item{id}{Character vector of gene names}

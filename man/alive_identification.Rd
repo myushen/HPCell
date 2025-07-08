@@ -10,7 +10,8 @@ alive_identification(
   cell_type_ensembl_harmonised_tbl = NULL,
   cell_type_column = NULL,
   assay = NULL,
-  feature_nomenclature
+  feature_nomenclature,
+  species_db
 )
 }
 \arguments{
@@ -23,6 +24,8 @@ alive_identification(
 \item{cell_type_column}{A character vector indicating the cell type column used for grouping during quality control and dead cell removal.}
 
 \item{assay}{assay used, default = "RNA"}
+
+\item{species_db}{The ligand-receptor interaction database curated in CellChat tool.}
 }
 \value{
 A tibble identifying alive cells.

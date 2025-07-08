@@ -8,11 +8,14 @@ empty_droplet_id(
   input_read_RNA_assay,
   total_RNA_count_check = -Inf,
   assay = NULL,
-  feature_nomenclature
+  feature_nomenclature,
+  species_db
 )
 }
 \arguments{
 \item{input_read_RNA_assay}{SingleCellExperiment or Seurat object containing RNA assay data.}
+
+\item{species_db}{The ligand-receptor interaction database curated in CellChat tool.}
 
 \item{filter_empty_droplets}{Logical value indicating whether to filter the input data.}
 }
