@@ -33,24 +33,26 @@ for(core in Cores) {
     if(length(files) < sample_size) {
       break # Break if the sample_size exceeds the available files
     }
-    # if (need_invalidate) {
-    #   tar_invalidate(names = everything(), store = store) # Reset flag after invalidation to prevent repeated invalidation in the loop
-    # }
-    #tar_invalidate(names = everything(), store = store)
-    # Select the subset of files to process in this iteration
-    #file_subset <- files[1:i] 
-    file_subset <- files[1:sample_size]
-    max_workers <- 100  
-    workers_per_sample <- 4
-    total_workers <- min(core, length(file_subset))
-    # Initialize computing resources for all files
-    computing_resources = crew_controller_slurm(
-      name = "my_controller",
-      slurm_memory_gigabytes_per_cpu = 20,
-      slurm_cpus_per_task = 1, 
-      workers = total_workers, 
-      verbose = FALSE
-    )
+    #setwd("~/HPCell")
+  tar_invalidate(names = everything(), store = store)
+  
+  # Select the subset of files to process in this iteration
+  #file_subset <- files[1:i] 
+  file_subset <- files[1:sample_size]
+  max_workers <- 100  
+  workers_per_sample <- 4
+  number_of_samples <- length(file_subset)
+  #total_workers <- min(number_of_samples * workers_per_sample, max_workers)
+  total_workers <- min(core * sample_size, length(file_subset))
+  # Initialize computing resources for all files
+  computing_resources = crew_controller_slurm(
+    name = "my_controller",
+    slurm_memory_gigabytes_per_cpu = 20,
+    slurm_cpus_per_task = 1, 
+    workers = total_workers, 
+    verbose = FALSE, 
+    seconds_idle = 30
+  )
     # Time and run your pipeline function
     #setwd("~/HPCell")
     time_taken <- system.time({

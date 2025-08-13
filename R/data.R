@@ -30,17 +30,33 @@
 "dummy_hpc"
 
 #' 
-#' #' A data frame of Ensembl genes retrieved from biomaRt package
-#' #' 
-#' #' @format A data frame map of ensembl_gene_id, external_gene_name and chromosome_name
-#' #' 
-#' #' @usage 
-#' #' data(biomart_ensembl_genes)
-#' #' 
-#' #' @source biomaRt getBM 
-#' #' 
-#' #' @keywords datasets
-#' #' 
-#' #' @docType data
-#' #' @noRd
-#' "biomart_ensembl_genes"
+#' This dataset contains Ensembl gene IDs, external gene names, and chromosome names
+#' retrieved using the biomaRt package.
+#' 
+#' @format A data frame map of ensembl_gene_id, external_gene_name and chromosome_name
+#' 
+#' @usage 
+#' data(ensembl_genes_biomart)
+#' 
+#' @source biomaRt::getBM()
+#' 
+#' @keywords datasets
+#' @docType data
+"ensembl_genes_biomart"
+
+#' CellChatDB.human database
+#'
+#' A curated human ligand–receptor interaction database provided by the CellChat package.
+#'
+#' This object is typically used as input to the CellChat pipeline. It contains signaling pathway data 
+#' for cell-cell communication analysis.
+#'
+#' @format A list with multiple elements, each representing different parts of the signaling network.
+
+#' @usage
+#' data(CellChatDB.human)
+#' 
+#' @source CellChat::CellChatDB.human
+#' @noRd
+#'
+"CellChatDB.human"
