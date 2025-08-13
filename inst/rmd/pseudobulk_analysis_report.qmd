@@ -59,7 +59,6 @@ library(magrittr)
 library(here)
 ```
 
-
 ```{r, include=FALSE}
 preprocessing_output <- function(input_read_RNA_assay,
                                  empty_droplets_tbl,
@@ -119,7 +118,6 @@ preprocessing_output_S <- pmap(
   ~ preprocessing_output(..1, ..2, ..3, ..4, ..5, ..6)
 )
 ```
-
 
 ```{r, include=FALSE}
 create_pseudobulk <- function(preprocessing_output_S, assays = NULL, sample_name){
@@ -239,8 +237,8 @@ data_for_pca <-
 ```
 
 ## Global Sequencing Depth Density Plot
-This density plot compares the distribution of library sizes across samples after TMM normalization.
-This helps assess global sequencing-depth differences between samples before PCA is applied.
+
+This density plot compares the distribution of library sizes across samples after TMM normalization. This helps assess global sequencing-depth differences between samples before PCA is applied.
 
 ```{r, out.width='100%', fig.width=15, fig.height=10, warning=FALSE, message=FALSE, echo=FALSE}
 
@@ -282,6 +280,7 @@ num_components <- which(cum_var_explained >= 0.9)[1]
 ```
 
 ## Scree Plot
+
 This scree plot shows the proportion of variance explained by each principal component. Components contributing significantly to total variance are prioritized in interpretation of downstream analysis steps.
 
 ```{r, out.width='100%', fig.width=15, fig.height=10, warning=FALSE, message=FALSE, echo=FALSE}
@@ -325,6 +324,7 @@ x
 ```
 
 ## Cell Type Clustering via PCA
+
 Samples are grouped based on PCA of their pseudobulk profiles. Color represents number of aggregated cells contributing to each pseudobulk profile.
 
 ```{r, out.width='100%',  warning=FALSE, message=FALSE, echo=FALSE}

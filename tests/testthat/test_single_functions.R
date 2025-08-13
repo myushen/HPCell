@@ -739,14 +739,93 @@ input_hpc |>
   sample_name = "sample_names" |> is_target()
   )
 
-quarto::quarto_render(
-  input = "~/HPCell/Testing.qmd",
-  execute_params = list(
-    data_object = data_object,
-    empty_tbl = empty_tbl, 
-    sample_name = sample_name
-  ),
-  output_file = "output.html"
-)
+
+
+
+
+library(HPCell)
+library(targets)
+library(Seurat)
+library(SeuratData)
+library(crew)
+library(crew.cluster)
+
+file_paths <- file.path(getwd(), c("CTRL_seurat_tibble.rds", "STIM_seurat_tibble.rds"))
+names(file_paths) <- c("CTRL", "STIM")
+
+# Install and prepare IFNB demo dataset
+SeuratData::InstallData("ifnb")
+ifnb <- ifnb |> UpdateSeuratObject()
+ifnb.list <- SplitObject(ifnb, split.by = "stim")
+
+# Sample 300 cells per condition 
+set.seed(42)
+ctrl_subset <- subset(ifnb.list$CTRL, cells = sample(Cells(ifnb.list$CTRL), size = 300))
+stim_subset <- subset(ifnb.list$STIM, cells = sample(Cells(ifnb.list$STIM), size = 300))
+
+saveRDS(ctrl_subset, file_paths["CTRL"])
+saveRDS(stim_subset, file_paths["STIM"])
+
+input_hpc <- file_paths
+
+input_hpc =
+  file_paths |> 
+  magrittr::set_names(c("CTRL", "STIM"))
+
+input_hpc |> 
+  initialise_hpc(
+    gene_nomenclature = "symbol",
+    data_container_type = "seurat_rds", 
+    computing_resources = crew_controller_local(workers = 8),
+  ) |> 
+  remove_empty_DropletUtils() |>          # Remove empty outliers
+  remove_dead_scuttle() |>                # Remove dead cells
+  score_cell_cycle_seurat() |>            # Score cell cycle
+  remove_doublets_scDblFinder() |>        # Remove doublets
+  annotate_cell_type() |>                 # Annotation across SingleR and Seurat Azimuth
+  normalise_abundance_seurat_SCT(factors_to_regress = c(
+    "subsets_Mito_percent", 
+    "subsets_Ribo_percent", 
+    "G2M.Score"
+  )) |> 
+  hpc_report(
+    "empty_report",
+    rmd_path = system.file("rmd", "Empty_droptlet_report.qmd", package = "HPCell"),
+    empty_tbl = "empty_tbl" |> is_target(),
+    data_object = "data_object" |> is_target(),
+    alive_tbl = "alive_tbl" |> is_target(),
+    sample_name = "sample_names" |> is_target()
+  ) |>
+  hpc_report(
+    "doublet_report",
+    rmd_path = system.file("rmd", "Doublet_identification_report.qmd", package = "HPCell"),
+    data_object = "data_object" |> is_target(),
+    doublet_tbl = "doublet_tbl" |> is_target(),
+    annotation_tbl = "annotation_tbl" |> is_target(),
+    sample_names = "sample_names" |> is_target()
+  ) |>
+  hpc_report(
+    "Technical_variation_report",
+    rmd_path = system.file("rmd", "technical_variation_report.qmd", package = "HPCell"),
+    data_object = "data_object" |> is_target(),
+    empty_tbl = "empty_tbl" |> is_target(),
+    sample_name = "sample_names" |> is_target()
+  ) |>
+  hpc_report(
+    "pseudo_bulk_report",
+    rmd_path = system.file("rmd", "pseudobulk_analysis_report.qmd", package = "HPCell"),
+    data_object = "data_object" |>  is_target(),
+    empty_tbl = "empty_tbl" |> is_target(),
+    alive_tbl = "alive_tbl" |> is_target(),
+    cell_cycle_tbl = "cell_cycle_tbl" |> is_target(),
+    annotation_tbl = "annotation_tbl" |> is_target(),
+    doublet_tbl = "doublet_tbl" |> is_target(),
+    sample_name = "sample_names" |> is_target()
+  )
+
+
+
+
+
 
                       
