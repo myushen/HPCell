@@ -113,7 +113,13 @@ importFrom(CellChat,createCellChat)
 importFrom(CellChat,filterCommunication)
 importFrom(CellChat,identifyOverExpressedGenes)
 importFrom(CellChat,identifyOverExpressedInteractions)
+<<<<<<< HEAD
 importFrom(CellChat,normalizeData)
+=======
+importFrom(CellChat,smoothData)
+importFrom(CellChat,scPalette)
+importFrom(CellChat,searchPair)
+>>>>>>> b129b6212876a8e990ca906908ba9ff2aa72d40d
 importFrom(CellChat,setIdent)
 importFrom(CellChat,smoothData)
 importFrom(CellChat,subsetCommunication)
