@@ -793,21 +793,6 @@ calc_UMAP <- function(input_seurat) {
   return(x)
 }
 
-
-# calc_UMAP <- function(input_seurat){
-#   assay_name = input_seurat@assays |> names() |> extract2(1)
-#   find_var_genes <- FindVariableFeatures(input_seurat)
-#   var_genes<- find_var_genes@assays[[assay_name]]@var.features
-#   
-#   x<- ScaleData(input_seurat) |>
-#     # Calculate UMAP of clusters
-#     RunPCA(features = var_genes) |>
-#     FindNeighbors(dims = 1:30) |>
-#     FindClusters(resolution = 0.5) |>
-#     RunUMAP(dims = 1:30, spread    = 0.5,min.dist  = 0.01, n.neighbors = 10L) |> 
-#     as_tibble()
-#   return(x)
-# }
 #' Subsetting input dataset into a list of SingleCellExperiment or Seurat objects by pre-specified sample column tissue 
 #' 
 #' @importFrom dplyr quo_name pull
