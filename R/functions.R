@@ -1873,7 +1873,7 @@ create_pseudobulk <- function(input_read_RNA_assay,
   rowData(pseudobulk)$feature_name = rownames(pseudobulk)
   colData(pseudobulk)$pseudobulk_sample = colnames(pseudobulk)
   
-  pseudobulk |>
+  pseudobulk = pseudobulk |>
     pivot_longer(cols = assays, names_to = "data_source", values_to = "count") |>
     filter(!count |> is.na()) |>
     
