@@ -807,6 +807,9 @@ doublet_identification <- function(input_read_RNA_assay,
                                    # reference_label_fine,
                                    assay = NULL){
   
+  # Make doublet assignment reproducible across runs 
+  set.seed(123)
+  
   # Fix GChecks 
   .cell = NULL 
   empty_droplet = NULL 
@@ -1879,19 +1882,19 @@ create_pseudobulk <- function(input_read_RNA_assay,
   colData(pseudobulk)$pseudobulk_sample = colnames(pseudobulk)
   
   pseudobulk = pseudobulk |>
-    pivot_longer(cols = assays, names_to = "data_source", values_to = "count") |>
-    filter(!count |> is.na()) |>
+    pivot_longer(cols = assays, names_to = "data_source", values_to = "counts") |>
+    filter(!counts |> is.na()) |>
     
     # Some manipulation to get unique feature because RNA and ADT
     # both can have same name genes
     dplyr::rename(symbol = .feature) |>
     mutate(data_source = stringr::str_remove(data_source, "abundance_")) |>
-    tidyr::unite(".feature", c(symbol, data_source), remove = FALSE) |>
+   # tidyr::unite(".feature", c(symbol, data_source), remove = FALSE) |>
     
     tidybulk::as_SummarizedExperiment(
       .sample = .sample,
-      .transcript = .feature,
-      .abundance = count
+      .transcript = symbol,
+      .abundance = counts
     ) 
   
   # Covert pseudobulk to SCE representation as zellkonverter::writeH5AD 
