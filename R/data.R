@@ -29,8 +29,6 @@
 #' 
 "dummy_hpc"
 
-
-#' A data frame of Ensembl genes retrieved from biomaRt package
 #' 
 #' This dataset contains Ensembl gene IDs, external gene names, and chromosome names
 #' retrieved using the biomaRt package.
