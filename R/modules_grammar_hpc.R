@@ -70,6 +70,7 @@ initialise_hpc <- function(input_hpc,
   dir.create(store, showWarnings = FALSE, recursive = TRUE)
   data_file_names = glue("{store}/{names(input_hpc)}.rds")
   
+  # Save parameters to files?
   input_hpc |> as.list() |>  saveRDS("input_file.rds")
   input_hpc |> names() |> saveRDS("sample_names.rds")
   
@@ -182,7 +183,6 @@ initialise_hpc <- function(input_hpc,
     )
   
 }
-
 
 
 
@@ -414,7 +414,6 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
     ...
   )
   
-  
 }
 
 # Define the generic function
@@ -468,7 +467,6 @@ calculate_pseudobulk.HPCell = function(input_hpc, group_by = NULL, target_input 
   
   pseudobulk_sample = 
     glue("{target_output}_iterated") |> 
-    
     # This is important otherwise targets fails with glue
     as.character()
   
@@ -651,6 +649,61 @@ get_single_cell.HPCell = function(input_hpc, target_input = "data_object", targe
 # 
 # 
 # })
+
+
+
+    #   
+    #   factory_collapse(
+    #     "colapsed_preprocessing_output",
+    #     bind_rows(preprocessing_output_S) ,
+    #     "preprocessing_output_S",
+    #     tiers
+    #   ),
+    #   
+    #   tar_render(
+    #     name = preprocessing_report,
+    #     path = paste0(system.file(package = "HPCell"), "/rmd/preprocessing_report.Rmd"),
+    #     params = list(
+    #       x1 = collapsed_preprocessing_output, 
+    #       x2 = group_by|> quo_name()
+    #     )
+    # ) 
+
+
+#' generate_report = function(tiers){
+#' 
+#'   list(
+#'     factory_split(
+#'       "final_report",
+#'       command = {read_file |>
+#'         read_data_container(container_type = data_container_type) |>
+        # tar_render(
+        #   name = empty_droplets_report,
+        #   path =  paste0(system.file(package = "HPCell"), "/rmd/Empty_droplet_report.Rmd"),
+        #   params = list(x1 = empty_droplets_tbl,
+        #                 # x2 = empty_droplets_tbl,
+        #                 # x3 = annotation_label_transfer_tbl
+        #                 # x4 = tar_read(unique_tissues, store = store),
+        #                 # x5 = sample_column |> quo_name()
+        #                 )) |>
+#'           quote()
+#'         },
+#'         tiers,
+#'         arguments_to_tier = "read_file",
+#'         other_arguments_to_tier = c("empty_droplets_tbl"
+#'                                     # "annotation_label_transfer_tbl",
+#'                                     # "doublet_identification_tbl"),
+#'         ),
+#'         other_arguments_to_map = c("empty_droplets_tbl"
+#'                                    # "annotation_label_transfer_tbl",
+#'                                    # "doublet_identification_tbl")
+#'       )
+#'     )
+#' 
+#'   )
+#' 
+#' }
+
 
 
 # Define the generic function

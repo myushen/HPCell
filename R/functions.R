@@ -614,8 +614,9 @@ annotation_label_transfer <- function(input_read_RNA_assay,
 #' @importFrom purrr map
 #' @importFrom magrittr not
 #' @importFrom Matrix colSums
-#' @importFrom magrittr extract2 not
-#' @importFrom SummarizedExperiment assay colData assay<-
+#' @importFrom magrittr extract2
+#' @importFrom SummarizedExperiment assay
+#' @importFrom SummarizedExperiment colData
 #' @importFrom tidyselect all_of
 #' 
 #' @export
@@ -891,8 +892,8 @@ doublet_identification <- function(input_read_RNA_assay,
   if (inherits(input_read_RNA_assay, "Seurat")) {
     input_read_RNA_assay <- input_read_RNA_assay |>
       Seurat::as.SingleCellExperiment() 
+    
   } 
-  
   # Filtering empty
   if (!is.null(empty_droplets_tbl)) { 
     input_read_RNA_assay <- input_read_RNA_assay |>
@@ -954,7 +955,6 @@ doublet_identification <- function(input_read_RNA_assay,
 #' @importFrom SeuratObject RenameAssays
 #' @importFrom Seurat NormalizeData
 #' @importFrom EnsDb.Hsapiens.v86 EnsDb.Hsapiens.v86
-#' @importFrom SummarizedExperiment assay assay<-
 #' @importFrom SingleCellExperiment SingleCellExperiment
 #' @export
 cell_cycle_scoring <- function(input_read_RNA_assay, 
@@ -972,10 +972,8 @@ cell_cycle_scoring <- function(input_read_RNA_assay,
   
   # Convert to Seurat in order to perform cell cycle scoring
   if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
-    assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> 
-      as("dgCMatrix")
-    input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL, 
-                                                              counts = assay) 
+    assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
+    input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL) 
     
     # Rename assay
     assay_name_old = input_read_RNA_assay |> Assays() |> _[[1]]
@@ -1037,7 +1035,6 @@ cell_cycle_scoring <- function(input_read_RNA_assay,
 #'
 #' @importFrom dplyr left_join filter
 #' @importFrom Seurat NormalizeData VariableFeatures SCTransform
-#' @importFrom SummarizedExperiment assay assay<-
 #' @export
 non_batch_variation_removal <- function(input_read_RNA_assay, 
                                         empty_droplets_tbl = NULL, 
@@ -1061,7 +1058,6 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
     
     input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL, 
                                                               counts = assay) 
-    
     # Rename assay
     assay_name_old = input_read_RNA_assay |> Assays() |> _[[1]]
     input_read_RNA_assay = input_read_RNA_assay |>
@@ -1189,7 +1185,6 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
                                  approx.N = 5000,
                                  seed = 12345,
                                  ...){
-  
   #Fix GChecks 
   empty_droplet = NULL 
   .cell <- NULL 
@@ -1782,7 +1777,6 @@ preprocessing_output <- function(input_read_RNA_assay,
     }
   }
   
-  
   # Filtering dead
   if(alive_identification_tbl |> is.null() |> not())
     input_read_RNA_assay = input_read_RNA_assay |>
@@ -1884,7 +1878,6 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @importFrom SingleCellExperiment SingleCellExperiment
 #' 
 #' @export
-
 # Create pseudobulk for each sample 
 create_pseudobulk <- function(input_read_RNA_assay, 
                               sample_names_vec, 
@@ -1938,8 +1931,8 @@ create_pseudobulk <- function(input_read_RNA_assay,
     mutate(sample_hpc = sample_names_vec) |> 
     
     # Aggregate
-    tidySingleCellExperiment::aggregate_cells(c(sample_hpc, !!sym(x)), 
-                                              slot = "data", assays = assays) 
+    #aggregate_cells(c(sample_hpc, any_of(x)), slot = "data", assays = assays) 
+    tidySingleCellExperiment::aggregate_cells(c(sample_hpc, !!sym(x)), slot = "data", assays = assays)
   
   # If I start from Seurat
   if(pseudobulk |> is("data.frame"))
@@ -1950,19 +1943,19 @@ create_pseudobulk <- function(input_read_RNA_assay,
   colData(pseudobulk)$pseudobulk_sample = colnames(pseudobulk)
   
   pseudobulk = pseudobulk |>
-    pivot_longer(cols = assays, names_to = "data_source", values_to = "count") |>
-    filter(!count |> is.na()) |>
+    pivot_longer(cols = assays, names_to = "data_source", values_to = "counts") |>
+    filter(!counts |> is.na()) |>
     
     # Some manipulation to get unique feature because RNA and ADT
     # both can have same name genes
     dplyr::rename(symbol = .feature) |>
     mutate(data_source = stringr::str_remove(data_source, "abundance_")) |>
-    tidyr::unite(".feature", c(symbol, data_source), remove = FALSE) |>
+   # tidyr::unite(".feature", c(symbol, data_source), remove = FALSE) |>
     
     tidybulk::as_SummarizedExperiment(
       .sample = .sample,
-      .transcript = .feature,
-      .abundance = count
+      .transcript = symbol,
+      .abundance = counts
     ) 
   
   # Covert pseudobulk to SCE representation as zellkonverter::writeH5AD 
@@ -2006,8 +1999,6 @@ create_pseudobulk <- function(input_read_RNA_assay,
 #' @importFrom SummarizedExperiment colData<-
 #' @importFrom SummarizedExperiment rowData
 #' @importFrom SummarizedExperiment rowData<-
-#' 
-#' 
 #' 
 #' @export
 #' 
