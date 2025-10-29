@@ -386,7 +386,8 @@ annotate_cell_type.HPCell = function(input_hpc, azimuth_reference = NULL, target
       input_read_RNA_assay = target_input |> is_target(), 
       empty_droplets_tbl = target_empty_droplets |> safe_as_name() ,
       reference_azimuth = azimuth_reference,
-      feature_nomenclature = "gene_nomenclature" |> is_target() 
+      feature_nomenclature = "gene_nomenclature" |> is_target() ,
+      species_db = "species" |> is_target()
     )
   
 }

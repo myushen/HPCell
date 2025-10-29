@@ -34,7 +34,7 @@ cell_communication(
 
 \item{feature_nomenclature}{Character vector specifying gene in Symbol or Ensemble format}
 
-\item{species_db}{The ligand-receptor interaction database curated in CellChat tool.}
+\item{species_db}{Character string specifying the species reference database to use. Whether its \code{human} or \code{mouse}}
 
 \item{...}{Additional arguments passed to \code{CellChat::subsetDB}}
 }

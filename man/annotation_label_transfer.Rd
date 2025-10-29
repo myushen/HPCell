@@ -9,6 +9,7 @@ annotation_label_transfer(
   empty_droplets_tbl = NULL,
   reference_azimuth = NULL,
   assay = NULL,
+  species_db,
   feature_nomenclature
 )
 }
@@ -20,6 +21,8 @@ annotation_label_transfer(
 \item{reference_azimuth}{Optional reference data for Azimuth.}
 
 \item{assay}{assay used, default = "RNA"}
+
+\item{species_db}{Character string specifying the species reference database to use. Whether its \code{human} or \code{mouse}}
 }
 \value{
 A tibble with cell type annotation data.

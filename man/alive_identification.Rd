@@ -25,7 +25,7 @@ alive_identification(
 
 \item{assay}{assay used, default = "RNA"}
 
-\item{species_db}{The ligand-receptor interaction database curated in CellChat tool.}
+\item{species_db}{Character string specifying the species reference database to use. Whether its \code{human} or \code{mouse}}
 }
 \value{
 A tibble identifying alive cells.

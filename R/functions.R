@@ -11,7 +11,7 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #'
 #' @param input_read_RNA_assay SingleCellExperiment or Seurat object containing RNA assay data.
 #' @param filter_empty_droplets Logical value indicating whether to filter the input data.
-#' @param species_db The ligand-receptor interaction database curated in CellChat tool.
+#' @param species_db Character string specifying the species reference database to use. Whether its `human` or `mouse`
 #'
 #' @return A tibble with columns: logProb, FDR, empty_droplet (classification of droplets).
 #'
@@ -201,7 +201,7 @@ empty_droplet_id <- function(input_read_RNA_assay,
 #' @param input_read_RNA_assay SingleCellExperiment or Seurat object containing RNA assay data.
 #' @param filter_empty_droplets Logical value indicating whether to filter the input data.
 #' @param RNA_feature_threshold An optional integer for the number of feature expressed in a sample.
-#' @param species_db The ligand-receptor interaction database curated in CellChat tool.
+#' @param species_db Character string specifying the species reference database to use. Whether its `human` or `mouse`
 #'
 #' @return A tibble with columns: Cell, nFeature_expressed_in_sample, nCount_RNA, empty_droplet (classification of droplets).
 #'
@@ -301,12 +301,13 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
 #' @param empty_droplets_tbl A tibble identifying empty droplets.
 #' @param reference_azimuth Optional reference data for Azimuth.
 #' @param assay assay used, default = "RNA" 
+#' @param species_db Character string specifying the species reference database to use. Whether its `human` or `mouse`
 #'
 #' @return A tibble with cell type annotation data.
 #'
 #' @importFrom celldex BlueprintEncodeData
 #' @importFrom celldex MonacoImmuneData
-#' 
+#' @importFrom celldex MouseRNAseqData
 #' @importFrom Seurat CreateAssayObject
 #' @importFrom Seurat SCTransform
 #' @importFrom Seurat CreateSeuratObject
@@ -340,6 +341,7 @@ annotation_label_transfer <- function(input_read_RNA_assay,
                                       empty_droplets_tbl = NULL, 
                                       reference_azimuth = NULL,
                                       assay = NULL,
+                                      species_db,
                                       feature_nomenclature
 ){
   # Fix github checks 
@@ -383,6 +385,42 @@ annotation_label_transfer <- function(input_read_RNA_assay,
     colnames(input_read_RNA_assay)[2]= "dummy___"
   }
   
+  # Split to mouse and human
+  if (species_db == "mouse") {
+    mousernaseq <- celldex::MouseRNAseqData(
+      ensembl = feature_nomenclature == "ensembl"
+    )
+    
+    data_annotated = input_read_RNA_assay |>
+      SingleR(
+        ref = mousernaseq,
+        assay.type.test= 1,
+        labels = mousernaseq$label.fine
+      )  |>
+      as_tibble(rownames=".cell") |>
+      nest(mouserna_scores_fine = starts_with("score")) |>
+      dplyr::select(-one_of("delta.next"),- pruned.labels) |>
+      dplyr::rename(mouserna.labels.fine = labels) |>
+      
+      left_join(
+        
+        input_read_RNA_assay |>
+          SingleR(
+            ref = mousernaseq,
+            assay.type.test= 1,
+            labels = mousernaseq$label.main
+          )  |>
+          as_tibble(rownames=".cell") |>
+          nest(mouserna_scores_coarse = starts_with("score")) |>
+          dplyr::select(-one_of("delta.next"),- pruned.labels) |>
+          dplyr::rename( mouserna.labels.coarse = labels)
+      )
+    
+    rm(mousernaseq)
+    gc()
+  }
+  
+  if (species_db == "human") {
   blueprint <- celldex::BlueprintEncodeData(
     ensembl = feature_nomenclature == "ensembl"
     #legacy = TRUE
@@ -533,11 +571,15 @@ annotation_label_transfer <- function(input_read_RNA_assay,
       })
     
     # Save
-    data_annotated  |>
+    data_annotated = data_annotated  |>
       left_join(azimuth_annotation, by = dplyr::join_by(.cell)	)
     
 
   }
+  
+  }
+  
+  data_annotated
 }
 
 #' Alive Cell Identification
@@ -551,7 +593,7 @@ annotation_label_transfer <- function(input_read_RNA_assay,
 #' @param cell_type_ensembl_harmonised_tbl A tibble with annotated cell type label data.
 #' @param cell_type_column A character vector indicating the cell type column used for grouping during quality control and dead cell removal.
 #' @param assay assay used, default = "RNA" 
-#' @param species_db The ligand-receptor interaction database curated in CellChat tool.
+#' @param species_db Character string specifying the species reference database to use. Whether its `human` or `mouse`
 #'
 #' @return A tibble identifying alive cells.
 #'
@@ -565,8 +607,10 @@ annotation_label_transfer <- function(input_read_RNA_assay,
 #' @importFrom stringr str_which
 #' @importFrom Seurat GetAssayData
 #' @importFrom Seurat PercentageFeatureSet
+#' @importFrom Seurat CreateSeuratObject
 #' @importFrom scater isOutlier
 #' @importFrom EnsDb.Hsapiens.v86 EnsDb.Hsapiens.v86
+#' @importFrom EnsDb.Mmusculus.v79 EnsDb.Mmusculus.v79
 #' @importFrom purrr map
 #' @importFrom magrittr not
 #' @importFrom Matrix colSums
@@ -598,7 +642,7 @@ alive_identification <- function(input_read_RNA_assay,
     stop("HPCell says: Your `group_by` columns are not present in your data. Please run annotate_cell_type_hpc() to get the cell type annotation that you can use as grouping for the cell-type-specific quality control and removal of dead cells.")
   
   # Get assay
-  if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
+  if(is.null(assay)) assay_name = input_read_RNA_assay@assays |> names() |> extract2(1)
   
   if (!is.null(empty_droplets_tbl)) {
     input_read_RNA_assay =
@@ -614,12 +658,12 @@ alive_identification <- function(input_read_RNA_assay,
   if (ncol(input_read_RNA_assay) == 1) input_read_RNA_assay = input_read_RNA_assay |> duplicate_single_column_assay()
   
   # Calculate nFeature_RNA and nCount_RNA if not exist in the data
-  nFeature_name <- paste0("nFeature_", assay)
-  nCount_name <- paste0("nCount_", assay)
+  nFeature_name <- paste0("nFeature_", assay_name)
+  nCount_name <- paste0("nCount_", assay_name)
   
   
   if (inherits(input_read_RNA_assay, "Seurat")) {
-    counts <- GetAssayData(input_read_RNA_assay, assay = assay, slot = "counts")
+    counts <- GetAssayData(input_read_RNA_assay, assay = assay_name, slot = "counts")
     if (!any(str_which(colnames(input_read_RNA_assay[[]]), nFeature_name)) ||
         !any(str_which(colnames(input_read_RNA_assay[[]]), nCount_name))) {
       input_read_RNA_assay[[nFeature_name]] <-
@@ -630,7 +674,7 @@ alive_identification <- function(input_read_RNA_assay,
       input_read_RNA_assay
     }
   } else if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
-    counts <- SummarizedExperiment::assay(input_read_RNA_assay, assay = assay)
+    counts <- assay(input_read_RNA_assay, assay = assay_name)
     if (!any(str_which(colnames(colData(input_read_RNA_assay)), nFeature_name)) ||
         !any(str_which(colnames(colData(input_read_RNA_assay)), nCount_name))) {
       colData(input_read_RNA_assay)[[nFeature_name]] <- Matrix::colSums(counts > 0)
@@ -639,21 +683,37 @@ alive_identification <- function(input_read_RNA_assay,
   }
   
   
+  ref_species = switch(species_db, human = EnsDb.Hsapiens.v86, mouse = EnsDb.Mmusculus.v79)
+  mt_pattern = switch(species_db, human = "MT-", mouse = "mt-")
+  ribosome_pattern = switch(species_db, human = "^(RPL|RPS)", mouse = "^(Rpl|Rps)")
   
-  # Returns a named vector of IDs
-  # Matches the gene id's row by row and inserts NA when it can't find gene names
+  
+  # Genes to exclude
   if (feature_nomenclature == "symbol") {
     location <- mapIds(
-      EnsDb.Hsapiens.v86,
+      ref_species,
       keys=rownames(input_read_RNA_assay),
       column="SEQNAME",
       keytype="SYMBOL"
     )
+    mitochondrial_genes = which(location=="MT") |> names()
+    ribosome_genes = rownames(input_read_RNA_assay) |> str_subset("^RPS|^RPL")
+    
+  } else if (feature_nomenclature == "ensembl") {
+    
+    # Map Ensembl to Symbol
+    gene_symbols <- mapIds(
+      ref_species,
+      keys = rownames(input_read_RNA_assay),
+      column = "SYMBOL",
+      keytype = "GENEID",
+      multiVals = "first"
+    )
+    which_mito =  rownames(input_read_RNA_assay)[
+      which(str_detect(gene_symbols, mt_pattern))
+    ]
+    
   }
-  mt_pattern = switch(species_db, human = "^MT", mouse = "^mt")
-  ribosome_pattern = switch(species_db, human = "^(RPL|RPS)", mouse = "^(Rpl|Rps)")
-  
-  which_mito = rownames(input_read_RNA_assay) |> str_which(mt_pattern)
   
   # mitochondrion =
   #   input_read_RNA_assay |>
@@ -688,21 +748,13 @@ alive_identification <- function(input_read_RNA_assay,
   
   #Extract counts for RNA assay
   if (inherits(input_read_RNA_assay, "Seurat")){
-    rna_counts <- GetAssayData(input_read_RNA_assay, layer = "counts", assay=assay)
+    rna_counts <- GetAssayData(input_read_RNA_assay, layer = "counts", assay=assay_name)
   } else if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
-    rna_counts <- SummarizedExperiment::assay(input_read_RNA_assay, assay=assay)
-    SummarizedExperiment::assay(input_read_RNA_assay, assay) <- 
-      SummarizedExperiment::assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
+    rna_counts <- assay(input_read_RNA_assay, assay=assay_name) |> as("dgCMatrix")
     
-    input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL, 
-                                                              counts = assay) 
-    
-    # Rename assay
-    assay_name_old = input_read_RNA_assay |> Assays() |> _[[1]]
-    input_read_RNA_assay = input_read_RNA_assay |>
-      RenameAssays(
-        assay.name = assay_name_old,
-        new.assay.name = assay)
+    coldata <- as.data.frame(colData(input_read_RNA_assay))
+    input_read_RNA_assay = CreateSeuratObject(rna_counts, meta.data = coldata, assay = assay_name)
+
   }
   
   # Compute per-cell QC metrics
@@ -711,7 +763,7 @@ alive_identification <- function(input_read_RNA_assay,
     dplyr::select(-sum, -detected)
   
   # I HAVE TO DROP UNIQUE, AS SOON AS THE BUG IN SEURAT IS RESOLVED. UNIQUE IS BUG PRONE HERE.
-  percentage_output = PercentageFeatureSet(input_read_RNA_assay,  pattern = ribosome_pattern, assay = assay)
+  percentage_output = PercentageFeatureSet(input_read_RNA_assay,  pattern = ribosome_pattern, assay = assay_name)
   percentage_output = percentage_output[!duplicated(names(percentage_output))]
   # Compute ribosome statistics
   ribosome =
@@ -822,6 +874,9 @@ doublet_identification <- function(input_read_RNA_assay,
                                    # annotation_label_transfer_tbl,
                                    # reference_label_fine,
                                    assay = NULL){
+  
+  # THIS IS IMPORTANT. Make doublet assignment reproducible across runs 
+  set.seed(123)
   
   # Fix GChecks 
   .cell = NULL 
@@ -2092,7 +2147,7 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 #' @param assay Character string specifying which assay to use
 #' @param cell_type_column Character string specifying the column name containing cell type annotations
 #' @param feature_nomenclature Character vector specifying gene in Symbol or Ensemble format
-#' @param species_db The ligand-receptor interaction database curated in CellChat tool.
+#' @param species_db Character string specifying the species reference database to use. Whether its `human` or `mouse`
 #' @param ... Additional arguments passed to \code{CellChat::subsetDB}
 #' @return A CellChat tibble containing the inferred communication at the level of 
 #'     ligands/receptors

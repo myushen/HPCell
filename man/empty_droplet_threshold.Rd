@@ -16,7 +16,7 @@ empty_droplet_threshold(
 \arguments{
 \item{input_read_RNA_assay}{SingleCellExperiment or Seurat object containing RNA assay data.}
 
-\item{species_db}{The ligand-receptor interaction database curated in CellChat tool.}
+\item{species_db}{Character string specifying the species reference database to use. Whether its \code{human} or \code{mouse}}
 
 \item{RNA_feature_threshold}{An optional integer for the number of feature expressed in a sample.}
 
