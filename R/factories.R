@@ -135,11 +135,11 @@ hpc_internal_report = function(
 
   if(tiers |> is.null() || tiers |> length() < 2){
     
-    tar_render_raw(
+    tar_quarto_raw(
       name = target_output |> as.character(), 
       path = rmd_path,
       output_file = output_file,
-      render_arguments = render_arguments,
+      execute_params = render_arguments,
       # This is in case I am not tiering (e.g. DE analyses) but I need to map
       # pattern = build_pattern(other_arguments_to_map = other_arguments_to_map),
       
@@ -161,7 +161,7 @@ hpc_internal_report = function(
     
     map2(tiers, names(tiers), ~ {
       
-      tar_render_raw(
+      tar_quarto_raw(
         name = 
           glue("{target_output}_{.y}") |> 
           
@@ -427,8 +427,7 @@ hpc_merge =
 #' 
 #' 
 #' @export
-hpc_report = 
-  function(input_hpc, target_output = NULL, rmd_path = NULL, ...) {
+hpc_report = function(input_hpc, target_output = NULL, rmd_path = NULL, ...) {
     
     # # Check for argument consistency
     # check_for_name_value_conflicts(...)
