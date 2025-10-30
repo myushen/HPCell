@@ -42,6 +42,31 @@ evaluate_hpc(input_hpc)
 }
 \value{
 The result of the differential abundance test.
+
+generate_report = function(tiers){
+
+list(
+factory_split(
+"final_report",
+command = {read_file |>
+read_data_container(container_type = data_container_type) |>
+quote()
+},
+tiers,
+arguments_to_tier = "read_file",
+other_arguments_to_tier = c("empty_droplets_tbl"
+# "annotation_label_transfer_tbl",
+# "doublet_identification_tbl"),
+),
+other_arguments_to_map = c("empty_droplets_tbl"
+# "annotation_label_transfer_tbl",
+# "doublet_identification_tbl")
+)
+)
+
+)
+
+}
 }
 \description{
 This function tests differential abundance for HPCell objects.

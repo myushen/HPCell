@@ -87,7 +87,7 @@ calc_UMAP <- function(input_seurat) {
   # Ensure that there are variable features before proceeding
   if (length(var_genes) > 0) {
     # Scale data and run PCA on variable genes
-    x <- ScaleData(input_seurat) |>
+    x <- input_seurat |> NormalizeData |> ScaleData() |>
       RunPCA(features = var_genes) |>
       FindNeighbors(dims = 1:30) |>
       FindClusters(resolution = 0.5) |>
@@ -132,6 +132,7 @@ get_labels_clusters = function(.data, label_column, dim1, dim2){
 ```
 
 ## Comprehensive UMAP Visualization of Cell Typing and Doublet Detection Across Tissue Samples
+
 -   This visualization highlights the clustering of cell types and identifies singlets and doublets in the population.
 -   This allows for an exploration of similarities and differences in gene expression profiles between cells from different tissues.
 
@@ -301,7 +302,6 @@ plot_merged_combined_annotation_doublets
 
 ```
 
-
 :::
 
 # Session Info
@@ -309,4 +309,3 @@ plot_merged_combined_annotation_doublets
 ```{r}
 sessionInfo()
 ```
-

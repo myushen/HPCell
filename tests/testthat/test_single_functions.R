@@ -330,8 +330,8 @@ calc_UMAP_result_list<- lapply(input_seurat_list, function(df) {
 # Unit test 
 test_that("R Markdown render empty droplet works", {
   # Define output paths
-  input_path <- paste0(system.file(package = "HPCell"), "/rmd/Empty_droplet_report.Rmd")
-  output_path <- paste0(system.file(package = "HPCell"), "/Empty_droplet_report.html")
+  input_path <- file.path(rprojroot::find_package_root_file(), "inst/rmd/Empty_droplet_report.qmd")
+  output_path <- file.path(rprojroot::find_package_root_file(), "inst/rmd/Empty_droplet_report.html")
   
   # Test execution: Render the R Markdown file
   rmarkdown::render(
@@ -411,8 +411,8 @@ for (i in seq_along(file_paths)) {
 
 ## Empty Droplets
 rmarkdown::render(
-  input =  paste0(system.file(package = "HPCell"), "/rmd/Empty_droplet_report.Rmd"),
-  output_file = paste0(system.file(package = "HPCell"), "/Empty_droplet_report.html"),
+  input =  file.path(rprojroot::find_package_root_file(), "inst/rmd/Empty_droplet_report.qmd"),
+  output_file = file.path(rprojroot::find_package_root_file(), "inst/rmd/Empty_droplet_report.html"),
   params = list(x1 = read_data_container(tar_read(file_path, store = store), container_type = tar_read(data_container_type_file, store = store)), 
                 x2 = tar_read(empty_droplets_tbl, store = store),
                 x3 = tar_read(annotation_label_transfer_tbl, store = store),
@@ -422,7 +422,7 @@ rmarkdown::render(
 
 ## Doublet identification 
 rmarkdown::render(
-  input = paste0(system.file(package = "HPCell"), "/rmd/Doublet_identification_report.Rmd"),
+  input = paste0(system.file(package = "HPCell"), "inst/rmd/Doublet_identification_report.qmd"),
   output_file = paste0(system.file(package = "HPCell"),"/Doublet_identification_report.html"),
   params = list(x1 = tar_read(input_read, store = store),
                 x2 = tar_read(calc_UMAP_dbl_report, store = store),
@@ -434,7 +434,7 @@ rmarkdown::render(
 
 ## Technical variation 
 rmarkdown::render(
-  input = paste0(system.file(package = "HPCell"), "/rmd/Technical_variation_report.Rmd"),
+  input = paste0(system.file(package = "HPCell"), "/rmd/Technical_variation_report.qmd"),
   output_file = paste0(system.file(package = "HPCell"), "/Technical_variation_report.html"),
   params = list(x1 = tar_read(input_read, store = store),
                 x2 = tar_read(empty_droplets_tbl, store = store), 
@@ -446,7 +446,7 @@ rmarkdown::render(
 
 ## Pseudobulk analysis report 
 rmarkdown::render(
-  input = paste0(system.file(package = "HPCell"), "/rmd/pseudobulk_analysis_report.Rmd"),
+  input = paste0(system.file(package = "HPCell"), "/rmd/pseudobulk_analysis_report.qmd"),
   output_file = paste0(system.file(package = "HPCell"), "/pseudobulk_analysis_report.html"),
   params = list(x1 = tar_read(pseudobulk_merge_all_samples, store = store), 
                 x2 = tar_read(sample_column, store = store) |> quo_name(), 
@@ -732,21 +732,16 @@ input_hpc |>
   gene_nomenclature = "symbol",
   data_container_type = "seurat_rds", 
   computing_resources = crew_controller_local(workers = 8),
+  store = "~/scratch/test_report"
   ) |> 
   remove_empty_DropletUtils() |>          # Remove empty outliers
   remove_dead_scuttle() |>                # Remove dead cells
-  score_cell_cycle_seurat() |>            # Score cell cycle
   remove_doublets_scDblFinder() |>        # Remove doublets
   annotate_cell_type() |>                 # Annotation across SingleR and Seurat Azimuth
-  normalise_abundance_seurat_SCT(factors_to_regress = c(
-    "subsets_Mito_percent", 
-    "subsets_Ribo_percent", 
-    "G2M.Score"
-  )) |> 
 
   hpc_report(
     "empty_report",
-    rmd_path = system.file("rmd", "Empty_droptlet_report.qmd", package = "HPCell"),
+    rmd_path = file.path(rprojroot::find_package_root_file(), "inst/rmd/Empty_droplet_report.qmd"),
     empty_tbl = "empty_tbl" |> is_target(),
     data_object = "data_object" |> is_target(),
     alive_tbl = "alive_tbl" |> is_target(),
@@ -755,7 +750,7 @@ input_hpc |>
 # |>
   hpc_report(
     "doublet_report",
-    rmd_path = system.file("rmd", "Doublet_identification_report.qmd", package = "HPCell"),
+    rmd_path = file.path(rprojroot::find_package_root_file(), "inst/rmd/Doublet_identification_report.qmd"),
     data_object = "data_object" |> is_target(),
     doublet_tbl = "doublet_tbl" |> is_target(),
     annotation_tbl = "annotation_tbl" |> is_target(),
@@ -763,14 +758,14 @@ input_hpc |>
   ) |>
   hpc_report(
     "Technical_variation_report",
-    rmd_path = system.file("rmd", "technical_variation_report.qmd", package = "HPCell"),
+    rmd_path = file.path(rprojroot::find_package_root_file(), "inst/rmd/technical_variation_report.qmd"),
     data_object = "data_object" |> is_target(),
     empty_tbl = "empty_tbl" |> is_target(),
     sample_name = "sample_names" |> is_target()
   ) |>
   hpc_report(
   "pseudo_bulk_report",
-  rmd_path = system.file("rmd", "pseudobulk_analysis_report.qmd", package = "HPCell"),
+  rmd_path = file.path(rprojroot::find_package_root_file(), "inst/rmd/pseudobulk_analysis_report.qmd"),
   data_object = "data_object" |>  is_target(),
   empty_tbl = "empty_tbl" |> is_target(),
   alive_tbl = "alive_tbl" |> is_target(),
@@ -818,6 +813,7 @@ input_hpc |>
     gene_nomenclature = "symbol",
     data_container_type = "seurat_rds", 
     computing_resources = crew_controller_local(workers = 8),
+    store = "~/scratch/test_report"
   ) |> 
   remove_empty_DropletUtils() |>          # Remove empty outliers
   remove_dead_scuttle() |>                # Remove dead cells

@@ -22,6 +22,7 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #' @importFrom DropletUtils emptyDrops barcodeRanks
 #' @importFrom S4Vectors metadata
 #' @importFrom EnsDb.Hsapiens.v86 EnsDb.Hsapiens.v86
+#' @importFrom EnsDb.Mmusculus.v79 EnsDb.Mmusculus.v79
 #' @importFrom biomaRt useMart getBM
 #' 
 #' @export
@@ -41,15 +42,24 @@ empty_droplet_id <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
+  
+  # # Check if empty droplets have been identified
+  # if (any(input_read_RNA_assay$nFeature_RNA < total_RNA_count_check)) {
+  #   
+  filter_empty_droplets <- TRUE
+  # }
+  # else {
+  #   filter_empty_droplets <- "FALSE"
+  # }
+  
+  significance_threshold = 0.001
+  
   # Get counts
   if (inherits(input_read_RNA_assay, "Seurat")) {
     counts <- GetAssayData(input_read_RNA_assay, assay, slot = "counts")
   } else if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
     counts <- assay(input_read_RNA_assay, assay)
   }
-  
-  
-  significance_threshold = 0.001
   
   ref_species = switch(species_db, human = EnsDb.Hsapiens.v86, mouse = EnsDb.Mmusculus.v79)
   mt_pattern = switch(species_db, human = "MT-", mouse = "mt-")
@@ -61,23 +71,34 @@ empty_droplet_id <- function(input_read_RNA_assay,
       ref_species,
       keys=rownames(input_read_RNA_assay),
       column="SEQNAME",
-      keytype="SYMBOL"
+      keytype="SYMBOL",
+      multiVals = "first"
     )
-    mitochondrial_genes = which(location=="MT") |> names()
-    ribosome_genes = rownames(input_read_RNA_assay) |> str_subset("^RPS|^RPL")
     
   } else if (feature_nomenclature == "ensembl") {
-    # all_genes are saved in data/all_genes.rda to avoid recursively accessing biomaRt backend for potential timeout error
-    data(ensembl_genes_biomart)
-    all_mitochondrial_genes <- ensembl_genes_biomart[grep(mt_pattern, ensembl_genes_biomart$chromosome_name), ] 
-    all_ribosome_genes <- ensembl_genes_biomart[grep(ribosome_pattern, ensembl_genes_biomart$external_gene_name), ]
-    mitochondrial_genes <- all_mitochondrial_genes |> 
-      filter(ensembl_gene_id %in% rownames(input_read_RNA_assay)) |> pull(ensembl_gene_id)
-    ribosome_genes <- all_ribosome_genes |> 
-      filter(ensembl_gene_id %in% rownames(input_read_RNA_assay)) |> pull(ensembl_gene_id)
+    
+    # Map Ensembl to Symbol
+    location <- mapIds(
+      ref_species,
+      keys = rownames(input_read_RNA_assay),
+      column = "SYMBOL",
+      keytype = "GENEID",
+      multiVals = "first"
+    )
   }
   
+  mitochondrial_genes =  rownames(input_read_RNA_assay)[which(str_detect(location, mt_pattern))]
   
+  ribosome_genes = rownames(input_read_RNA_assay)[which(str_detect(location, ribosome_pattern))]
+  
+  # Calculate bar-codes ranks
+  barcode_ranks = barcodeRanks(counts[!rownames(counts) %in% c(mitochondrial_genes, ribosome_genes),, drop=FALSE])
+  
+  # Set the minimum total RNA per cell for ambient RNA
+  if(min(barcode_ranks$total) < 100) { lower = 100 } else {
+    lower = quantile(barcode_ranks$total, 0.05)
+  }
+    
   # if ("originalexp" %in% names(input_file@assays)) {
   #   barcode_ranks <- barcodeRanks(input_file@assays$originalexp@counts[!rownames(input_file@assays$originalexp@counts) %in% c(mitochondrial_genes, ribosome_genes),, drop=FALSE])
   # } else if ("RNA" %in% names(input_file@assays)) {
@@ -85,19 +106,33 @@ empty_droplet_id <- function(input_read_RNA_assay,
   # }
   
   
-  filtered_counts <- counts[!(rownames(counts) %in% c(mitochondrial_genes, ribosome_genes)),, drop=FALSE ]
+  # Remove genes from input
+  if (filter_empty_droplets) {
+    barcode_table <- counts[!rownames(counts) %in% c(mitochondrial_genes, ribosome_genes),, drop=FALSE] |>
+      emptyDrops( test.ambient = TRUE, lower=lower) |>
+      as_tibble(rownames = ".cell") |>
+      mutate(empty_droplet = FDR >= significance_threshold) |>
+      replace_na(list(empty_droplet = TRUE))
+  }
+  else {
+    barcode_table <- input_read_RNA_assay |>
+      as_tibble() |>
+      select(.cell) |>
+      mutate( empty_droplet = FALSE)
+  } 
   
-  n_expressed_genes_non_zero = (filtered_counts > 0) |> colSums()
-  
-  filter_empty_droplets = n_expressed_genes_non_zero |> min() < 200
-  
-  if(!filter_empty_droplets)
-    return(  input_read_RNA_assay |> 
-               as_tibble() |> 
-               select(.cell) |>
-               mutate( empty_droplet = FALSE))
-  
-  quantile_expressed_genes = n_expressed_genes_non_zero |> quantile(0.05)
+  # barcode ranks
+  barcode_table <- barcode_table |>
+    left_join(
+      barcode_ranks |>
+        as_tibble(rownames = ".cell") |>
+        mutate(
+          knee =  metadata(barcode_ranks)$knee,
+          inflection =  metadata(barcode_ranks)$inflection
+        )
+    )
+
+  barcode_table
   
   # Check if empty droplets have been identified
   # nFeature_name <- paste0("nFeature_", assay)
@@ -110,37 +145,36 @@ empty_droplet_id <- function(input_read_RNA_assay,
   # }
   
   # Attempt to run emptyDrops() and handle potential errors
-  tryCatch({
-    # WE CANNOT USE AMBIENT PARAMETER BECAUSE WITH PERCULIAR DATASETS WITH 
-    # cells with more zeros have also more total RNA counts dysfunction stalls 
-    # for example for this sample
-    #.cell                                                   dataset_id                           sample_id 
-    #AAACCCAAGCTAATCC___eec804b9-2ae5-44f0-a1b5-d721e21257de eec804b9-2ae5-44f0-a1b5-d721e21257de 485c0dac47c6bd0b91fd3ae9d7de7385
-    
-    emptyDrops(filtered_counts) |> 
-      as_tibble(rownames = ".cell") |>
-      mutate(empty_droplet = FDR >= significance_threshold) |>
-      replace_na(list(empty_droplet = TRUE)) |> 
-      mutate(filter_empty_method = "emptyDrops")
-    
-  }, error = function(e) {
-    # Check if the error message matches the specific error
-    if (grepl("no counts available to estimate the ambient profile", e$message)) {
-      # You can also print a message if you like
-      message("Error encountered: ", e$message)
-      message("Setting do_filter to FALSE.")
-      
-      # Return NULL or an empty object as appropriate
-      input_read_RNA_assay |> 
-        as_tibble() |> 
-        select(.cell) |>
-        mutate( empty_droplet = n_expressed_genes_non_zero < 200)  |> 
-        mutate(filter_empty_method = "expressed_genes_more_than_200")
-    } else {
-      # For other errors, re-throw the error
-      stop(e)
-    }
-  })
+  # tryCatch({
+  #   # WE CANNOT USE AMBIENT PARAMETER BECAUSE WITH PERCULIAR DATASETS WITH 
+  #   # cells with more zeros have also more total RNA counts dysfunction stalls 
+  #   # for example for this sample
+  #   #.cell                                                   dataset_id                           sample_id 
+  #   #AAACCCAAGCTAATCC___eec804b9-2ae5-44f0-a1b5-d721e21257de eec804b9-2ae5-44f0-a1b5-d721e21257de 485c0dac47c6bd0b91fd3ae9d7de7385
+  #   
+  #   emptyDrops(filtered_counts) |> 
+  #     as_tibble(rownames = ".cell") |>
+  #     mutate(empty_droplet = FDR >= significance_threshold) |>
+  #     replace_na(list(empty_droplet = TRUE)) |> 
+  #     mutate(filter_empty_method = "emptyDrops")
+  #   
+  # }, error = function(e) {
+  #   # Check if the error message matches the specific error
+  #   if (grepl("no counts available to estimate the ambient profile", e$message)) {
+  #     # You can also print a message if you like
+  #     message("Error encountered: ", e$message)
+  #     message("Setting do_filter to FALSE.")
+  #     
+  #     # Return NULL or an empty object as appropriate
+  #     input_read_RNA_assay |> 
+  #       as_tibble() |> 
+  #       select(.cell) |>
+  #       mutate( empty_droplet = n_expressed_genes_non_zero < 200)  |> 
+  #       mutate(filter_empty_method = "expressed_genes_more_than_200")
+  #   } else {
+  #     # For other errors, re-throw the error
+  #     stop(e)
+  #   }
   
   
   # barcode ranks
@@ -250,20 +284,25 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
       column="SEQNAME",
       keytype="SYMBOL"
     )
+    
     mitochondrial_genes = which(location=="MT") |> names()
     ribosome_genes = rownames(input_read_RNA_assay) |> str_subset("^RPS|^RPL")
     
   } else if (feature_nomenclature == "ensembl") {
     # all_genes are saved in data/all_genes.rda to avoid recursively accessing biomaRt backend for potential timeout error
     data(ensembl_genes_biomart)
-    all_mitochondrial_genes <- ensembl_genes_biomart[grep(mt_pattern, ensembl_genes_biomart$chromosome_name), ] 
-    all_ribosome_genes <- ensembl_genes_biomart[grep(ribosome_pattern, ensembl_genes_biomart$external_gene_name), ]
+    all_mitochondrial_genes <- ensembl_genes_biomart[grep("MT", ensembl_genes_biomart$chromosome_name), ] 
+    all_ribosome_genes <- ensembl_genes_biomart[grep("^(RPL|RPS)", ensembl_genes_biomart$external_gene_name), ]
     
     mitochondrial_genes <- all_mitochondrial_genes |> 
       filter(ensembl_gene_id %in% rownames(input_read_RNA_assay)) |> pull(ensembl_gene_id)
     ribosome_genes <- all_ribosome_genes |> 
       filter(ensembl_gene_id %in% rownames(input_read_RNA_assay)) |> pull(ensembl_gene_id)
   }
+  mitochondrial_genes =  rownames(input_read_RNA_assay)[which(str_detect(location, mt_pattern))]
+    
+  ribosome_genes = rownames(input_read_RNA_assay)[which(str_detect(location, ribosome_pattern))]
+  
   
   # Get counts
   if (inherits(input_read_RNA_assay, "Seurat")) {
