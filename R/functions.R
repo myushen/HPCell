@@ -730,14 +730,15 @@ alive_identification <- function(input_read_RNA_assay,
   
   # Genes to exclude
   if (feature_nomenclature == "symbol") {
-    location <- mapIds(
+    gene_symbols <- mapIds(
       ref_species,
       keys=rownames(input_read_RNA_assay),
       column="SEQNAME",
       keytype="SYMBOL"
     )
-    mitochondrial_genes = which(location=="MT") |> names()
-    ribosome_genes = rownames(input_read_RNA_assay) |> str_subset("^RPS|^RPL")
+    which_mito =  rownames(input_read_RNA_assay)[
+      which(str_detect(gene_symbols, mt_pattern))
+    ]
     
   } else if (feature_nomenclature == "ensembl") {
     

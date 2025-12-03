@@ -735,9 +735,10 @@ input_hpc |>
   store = "~/scratch/test_report"
   ) |> 
   remove_empty_DropletUtils() |>          # Remove empty outliers
-  remove_dead_scuttle() |>                # Remove dead cells
-  remove_doublets_scDblFinder() |>        # Remove doublets
   annotate_cell_type() |>                 # Annotation across SingleR and Seurat Azimuth
+  remove_dead_scuttle(target_annotation = "annotation_tbl", 
+                      group_by = "blueprint_first.labels.coarse") |>                # Remove dead cells
+  remove_doublets_scDblFinder() |>        # Remove doublets
 
   hpc_report(
     "empty_report",
