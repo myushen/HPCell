@@ -489,4 +489,52 @@ hpc_report = function(input_hpc, target_output = NULL, rmd_path = NULL, ...) {
       add_class("HPCell")
     
     
-  }
+}
+
+
+#' Add a report rendering step to the HPC pipeline
+#'
+#' @param input_hpc A HPCell object
+#' @param report_name Name of report target
+#' @param rmd_path Path to the Quarto report
+#' @param ... Named params passed to report (as target refs via `is_target()`)
+#'
+#' @export
+hpc_report_mengyuan <- function(
+    input_hpc,
+    report_name,
+    rmd_path,
+    ...
+) {
+  # check args
+  check_for_name_value_conflicts(...)
+  
+  # Target script
+  target_script <- glue::glue("{input_hpc$initialisation$store}.R")
+  
+  # delete existing line
+  report_name |> delete_lines_with_word(target_script)
+  
+  # Create target call
+  # Each param becomes params = list(param = value, ...)
+  params_list <- list(...) |>
+    purrr::imap(~ substitute(.x, list(.x = .x)))
+  
+  tar_append(
+    fx = quarto_render |> quote(),
+    script = target_script,
+    target_output = report_name,
+    rmd_path = rmd_path,
+    params = params_list
+  )
+  
+  # Add to HPCell chain
+  input_hpc |>
+    c(
+      as.list(environment())[-1] |>
+        c(list(iterate = "single")) |>
+        list() |>
+        set_names(report_name)
+    ) |>
+    add_class("HPCell")
+}

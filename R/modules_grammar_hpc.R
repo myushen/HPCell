@@ -436,6 +436,62 @@ cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object",
     )
 }
 
+generate_report <- function(input_hpc,
+                            report_name, rmd_path, ..., user_function = NULL, 
+                            user_function_source_path = NULL) {
+  UseMethod("generate_report")
+}
+
+#' @export
+generate_report.HPCell <- function(input_hpc, report_name, rmd_path, ..., user_function = NULL, 
+                                   user_function_source_path = NULL) {
+  
+  sample_list = 
+    glue("data_object") |> 
+    # This is important otherwise targets fails with glue
+    as.character()
+  
+  empty_list = 
+    glue("empty_tbl") |> 
+    # This is important otherwise targets fails with glue
+    as.character()
+  
+  alive_list = 
+    glue("alive_tbl") |> 
+    # This is important otherwise targets fails with glue
+    as.character()
+  
+  doublet_list = 
+    glue("doublet_tbl") |> 
+    # This is important otherwise targets fails with glue
+    as.character()
+  
+  input_hpc |>
+    
+    # merge
+    hpc_merge(
+      target_output = target_output,
+      user_function = upstream_sample_merge |> quote(),
+      external_path = glue("{input_hpc$initialisation$store}/external") |> as.character(),
+      data_object_list = pseudobulk_sample |> is_target(),
+      packages = c("tidySummarizedExperiment", "HPCell")
+    )
+  
+    hpc_merge(
+      target_output = deps_target,
+      # keep your quoting pattern consistent with hpc_merge/tar_append usage
+      user_function = uf |> quote() |> substitute(env = list(uf = user_function)),
+      user_function_source_path = user_function_source_path,
+      ...
+    ) |>
+    hpc_report(
+      report_name = report_name,
+      rmd_path = rmd_path,
+      ...
+    )
+}
+
+
 # Define the generic function
 #' @export
 calculate_pseudobulk <- function(input_hpc, group_by = NULL, target_input = "data_object", 

@@ -56,7 +56,7 @@ calc_UMAP <- function(input_seurat) {
   }
   var_genes <- VariableFeatures(input_seurat)
   if (length(var_genes) > 0) {
-    ScaleData(input_seurat) |>
+    input_seurat |> NormalizeData() |> ScaleData() |>
       RunPCA(features = var_genes) |>
       FindNeighbors(dims = 1:30) |>
       FindClusters(resolution = 0.5) |>
@@ -78,11 +78,11 @@ get_labels_clusters <- function(.data, label_column, dim1, dim2){
       !!dim1 := map_dbl(data, ~ median(pull(.x, !!dim1))),
       !!dim2 := map_dbl(data, ~ median(pull(.x, !!dim2)))
     ) %>%
-    select(-data)
+    dplyr::select(-data)
 }
 
 # Generate UMAP
-calc_UMAP_dbl_report <- map(params$data_object, calc_UMAP)
+calc_UMAP_dbl_report <- map(data_object, calc_UMAP)
 ```
 
 ## Introduction
@@ -95,16 +95,16 @@ This report contains UMAP representation of cell clusters and visualization of t
 # Merge metadata
 merged_data <- list(
   calc_UMAP_dbl_report,
-  params$doublet_tbl,
-  params$annotation_tbl,
-  params$sample_names
+  doublet_tbl,
+  annotation_tbl,
+  sample_names
 ) |> 
   pmap(~ ..1 |> 
          mutate(sample_column = ..4) |>
          left_join(..2 |> mutate(sample_column = ..4), by = ".cell") |>
          left_join(..3 |> mutate(sample_column = ..4), by = ".cell")) |>
   enframe(name = "sample_id", value = "annotated_metadata") |>
-  mutate(sample_column = params$sample_names)
+  mutate(sample_column = sample_names)
 
 # Plot UMAPs
 plots_by_doublet <- merged_data |> 
@@ -140,7 +140,7 @@ composition_plot <- merged_data |>
   mutate(composition = map(
     annotated_metadata,
     ~ .x |>
-      count(sample_column, !!sym(cell_ann_col), scDblFinder.class, name = "count") |>
+      dplyr::count(sample_column, !!sym(cell_ann_col), scDblFinder.class, name = "count") |>
       group_by(sample_column, !!sym(cell_ann_col)) |>
       mutate(proportion = count / sum(count)) |>
       ungroup()
