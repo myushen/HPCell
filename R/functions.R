@@ -624,11 +624,11 @@ alive_identification <- function(input_read_RNA_assay,
     }
   }
   
-  input_read_RNA_assay <- input_read_RNA_assay %>%
-    AddMetaData(
-      metadata = PercentageFeatureSet(input_read_RNA_assay, pattern = "^MT-", assay = assay), 
-      col.name = "percent.mt"
-    )
+  # input_read_RNA_assay <- input_read_RNA_assay %>%
+  #   AddMetaData(
+  #     metadata = PercentageFeatureSet(input_read_RNA_assay, pattern = "^MT-", assay = assay), 
+  #     col.name = "percent.mt"
+  #   )
   
   # Returns a named vector of IDs
   # Matches the gene id's row by row and inserts NA when it can't find gene names
@@ -682,7 +682,7 @@ alive_identification <- function(input_read_RNA_assay,
     rna_counts <- assay(input_read_RNA_assay, assay=assay)
     assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
     
-    input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL) 
+    input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL, counts = assay) 
     
     # Rename assay
     assay_name_old = input_read_RNA_assay |> Assays() |> _[[1]]
@@ -1801,7 +1801,6 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @importFrom stringr str_remove
 #' @importFrom tidyr unite
 #' @importFrom tidyr pivot_longer
-#' @importFrom tidyseurat aggregate_cells
 #' @importFrom tidybulk as_SummarizedExperiment
 #' @importFrom S4Vectors cbind
 #' @importFrom purrr map
@@ -1810,6 +1809,7 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @importFrom digest digest
 #' @importFrom HDF5Array saveHDF5SummarizedExperiment
 #' @importFrom SingleCellExperiment SingleCellExperiment
+#' @importFrom scuttle aggregateAcrossCells
 #' 
 #' @export
 # Create pseudobulk for each sample 
@@ -1862,11 +1862,21 @@ create_pseudobulk <- function(input_read_RNA_assay,
     preprocessing_output_S |> 
     
     # Add sample
-    mutate(sample_hpc = sample_names_vec) |> 
-    
-    # Aggregate
-    #aggregate_cells(c(sample_hpc, any_of(x)), slot = "data", assays = assays) 
-    tidySingleCellExperiment::aggregate_cells(c(sample_hpc, !!sym(x)), slot = "data", assays = assays)
+    mutate(sample_hpc = sample_names_vec)
+  
+  ids <- pseudobulk |>
+    mutate(aggregated_cells = paste(.data$sample_hpc, .data[[x]], sep = "___")) |> 
+    pull(aggregated_cells)
+  
+  # Aggregate
+  pseudobulk <- scuttle::aggregateAcrossCells(
+      pseudobulk,
+      ids     = ids,
+      use.assay.type = assays,
+      BPPARAM = BiocParallel::MulticoreParam(workers = 2),
+      store_number = "aggregated_cells"
+    ) |> 
+    mutate(assays = assays)
   
   # If I start from Seurat
   if(pseudobulk |> is("data.frame"))
@@ -1876,21 +1886,21 @@ create_pseudobulk <- function(input_read_RNA_assay,
   rowData(pseudobulk)$feature_name = rownames(pseudobulk)
   colData(pseudobulk)$pseudobulk_sample = colnames(pseudobulk)
   
-  pseudobulk = pseudobulk |>
-    pivot_longer(cols = assays, names_to = "data_source", values_to = "counts") |>
-    filter(!counts |> is.na()) |>
-    
-    # Some manipulation to get unique feature because RNA and ADT
-    # both can have same name genes
-    dplyr::rename(symbol = .feature) |>
-    mutate(data_source = stringr::str_remove(data_source, "abundance_")) |>
-   # tidyr::unite(".feature", c(symbol, data_source), remove = FALSE) |>
-    
-    tidybulk::as_SummarizedExperiment(
-      .sample = .sample,
-      .transcript = symbol,
-      .abundance = counts
-    ) 
+  # pseudobulk = pseudobulk |>
+  #   pivot_longer(cols = assays, names_to = "data_source", values_to = "counts") |>
+  #   filter(!counts |> is.na()) |>
+  #   
+  #   # Some manipulation to get unique feature because RNA and ADT
+  #   # both can have same name genes
+  #   dplyr::rename(symbol = .feature) |>
+  #   mutate(data_source = stringr::str_remove(data_source, "abundance_")) |>
+  #  # tidyr::unite(".feature", c(symbol, data_source), remove = FALSE) |>
+  #   
+  #   tidybulk::as_SummarizedExperiment(
+  #     .sample = .sample,
+  #     .transcript = symbol,
+  #     .abundance = counts
+  #   ) 
   
   # Covert pseudobulk to SCE representation as zellkonverter::writeH5AD 
   #  does not support saving a SummarizedExperiment
@@ -1902,16 +1912,17 @@ create_pseudobulk <- function(input_read_RNA_assay,
     )
   }
 
-  file_name = glue::glue("{external_path}/{digest(pseudobulk)}")
+  pseudobulk
+  # file_name = glue::glue("{external_path}/{digest(pseudobulk)}")
   
   # Maybe do not need to save Anndata externally for cellNexus because pseudobulk can be read by tar_read_raw
-  pseudobulk |>
-    
-    # Convert to Anndata
-    save_experiment_data(
-      dir = file_name, 
-      container_type = container_type
-    )
+  # pseudobulk |>
+  #   
+  #   # Convert to Anndata
+  #   save_experiment_data(
+  #     dir = file_name, 
+  #     container_type = container_type
+  #   )
   
 }
 
