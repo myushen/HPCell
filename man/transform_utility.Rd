@@ -8,8 +8,7 @@ transform_utility(
   input_read_RNA_assay,
   transform_fx,
   external_path,
-  container_type,
-  scale_max
+  container_type
 )
 }
 \arguments{
@@ -20,9 +19,6 @@ transform_utility(
 \item{external_path}{A character string specifying the directory path to save the transformed object.}
 
 \item{container_type}{A character vector specifying the output file type. Ideally it should match to the input file type.}
-
-\item{scale_max}{An integer specifying the allowed max count value. It is used to define
-scaling factor in the process of transformation.}
 }
 \value{
 The function does not return an object. It saves the transformed SummarizedExperiment object to the specified path.

@@ -1,9 +1,7 @@
 # Define the generic function
 #' @export
 transform_assay <- function(input_hpc, fx = input_hpc$initialisation$input_hpc |> map(~identity), 
-                            target_input = "data_object", target_output = "sce_transformed", 
-                            # make every element to be 20 as a placeholder unless further indicate
-                            scale_max = input_hpc$initialisation$input_hpc |> map(~20), ...) {
+                            target_input = "data_object", target_output = "sce_transformed",  ...) {
   UseMethod("transform_assay")
 }
 
@@ -17,7 +15,6 @@ transform_assay.HPCell = function(
     fx = input_hpc$initialisation$input_hpc |> map(~"identity"), 
     target_input = "data_object", 
     target_output = "sce_transformed", 
-    scale_max = input_hpc$initialisation$input_hpc |> map(~20),
     ...
 ) {
   
@@ -35,14 +32,6 @@ transform_assay.HPCell = function(
       # ,
       # iteration = "list", 
       # deployment = "main"
-    ) |> 
-    
-    # Track the file
-    hpc_single("count_upper_bound_file", "count_upper_bound.rds", format = "file") |> 
-    hpc_iterate(
-      target_output = "count_upper_bound", 
-      user_function = readRDS |> quote() ,
-      file = "count_upper_bound_file" |> is_target() 
     ) |> 
     
     hpc_iterate(
@@ -67,8 +56,6 @@ transform_assay.HPCell = function(
 #' @param transform_fx A function to apply to the assay of the SummarizedExperiment object.
 #' @param external_path A character string specifying the directory path to save the transformed object.
 #' @param container_type A character vector specifying the output file type. Ideally it should match to the input file type.
-#' @param scale_max An integer specifying the allowed max count value. It is used to define 
-#'     scaling factor in the process of transformation.  
 #' @return The function does not return an object. It saves the transformed SummarizedExperiment object to the specified path.
 #'
 #' @importFrom SummarizedExperiment assay
@@ -84,7 +71,7 @@ transform_assay.HPCell = function(
 #'
 #' @export
 transform_utility  = function(input_read_RNA_assay, transform_fx, 
-                              external_path, container_type, scale_max) {
+                              external_path, container_type) {
   
   numer_of_cells_to_sample = 5e3
   
@@ -124,8 +111,8 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   # Check if the transformation method is not 'identity' and counts exceed 20
   # Reminder: cellNexus 2024-07-01 version scaling factor was set to 20. 
   if (!identical(transform_function, identity) ) {
-    if(max(counts) > scale_max){
-      scale_factor <- scale_max / max(counts)
+    if(max(counts) > 20){
+      scale_factor <- 20 / max(counts)
       counts <- counts * scale_factor
     }}
   
