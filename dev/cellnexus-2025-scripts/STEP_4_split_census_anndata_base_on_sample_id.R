@@ -9,7 +9,7 @@ library(stringr)
 library(arrow)
 library(glue)
 
-version <- "2025-01-30"
+version <- "2025-11-08"
 anndata_path_based_on_dataset_id_to_read <- file.path("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/h5ad/", version)
 anndata_path_based_on_sample_id_to_save <- file.path("/vast/scratch/users/shen.m/Census/split_h5ad_based_on_sample_id/", version)
 if (!dir.exists(anndata_path_based_on_sample_id_to_save)) dir.create(anndata_path_based_on_sample_id_to_save, recursive = TRUE)
@@ -159,7 +159,7 @@ list(
   ),
   tar_target(
     grouped_observation_joinid_per_sample,
-    read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/2025-01-30_census_samples_to_download.parquet") |>
+    read_parquet(glue::glue("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/{version}_census_samples_to_download.parquet")) |>
 
       # Note: dataset_id "99950e99-2758-41d2-b2c9-643edcdf6d82" and "9fcb0b73-c734-40a5-be9c-ace7eea401c9" 
       #       from Census does not contain any meaningful data (no observation_joinid in colData), thus produced 
@@ -179,7 +179,7 @@ list(
 )
 
 # tar_make(store = glue::glue("~/scratch/Census_final_run/{version}_new/split_h5ad_based_on_sample_id_target_store"),
-#          script = "~/git_control/cellNexus/dev/STEP_4_split_census_anndata_base_on_sample_id.R",
+#          script = "~/git_control/HPCell/dev/cellnexus-2025-scripts/STEP_4_split_census_anndata_base_on_sample_id.R",
 #          reporter = "summary")
 
 # tar_errored(store = "~/scratch/Census_final_run/split_h5ad_based_on_sample_id_target_store/")

@@ -25,28 +25,28 @@ org_name <- names(census_data$members)[grepl("homo", names(census_data$members),
 metadata <- census_data$get(org_name)$get("obs")
 
 selected_columns <- c('assay', 'assay_ontology_term_id','disease', 'disease_ontology_term_id',
-                       'donor_id', 'sex', 'sex_ontology_term_id', 'self_reported_ethnicity', 'self_reported_ethnicity_ontology_term_id',
-                       'tissue', 'tissue_ontology_term_id', 'tissue_type', 'development_stage', 'development_stage_ontology_term_id',
+                      'donor_id', 'sex', 'sex_ontology_term_id', 'self_reported_ethnicity', 'self_reported_ethnicity_ontology_term_id',
+                      'tissue', 'tissue_ontology_term_id', 'tissue_type', 'development_stage', 'development_stage_ontology_term_id',
                       'is_primary_data','dataset_id','observation_joinid', 'suspension_type',
                       "cell_type", "cell_type_ontology_term_id"
                       # tissue groups from Census. Why aren't they in cellNexus v1?
                       #, "tissue_general", "tissue_general_ontology_term_id" 
-                      )
+)
 old_dataset_ids <- metadata$read(column_names = selected_columns,
-                         value_filter = "is_primary_data == 'TRUE'")$concat() |>
+                                 value_filter = "is_primary_data == 'TRUE'")$concat() |>
   as.data.frame() |> pull(dataset_id) |> as.character() |> unique()
 
 #  Retrieve new Census version ------------------------------------
 date = get_census_version_directory() |> filter(alias == "stable") |> pull(release_build)
-# print(date)
-# [1] "2025-01-30"
+print(date)
+# [1] "2025-11-08"
 h5ads.uri = get_census_version_directory() |> filter(alias == "stable") |> pull(h5ads.uri)
 census <- open_soma(census_version = date)
 # Identify organisms available in the Census
 census_data <- census$get("census_data")
 org_name <- names(census_data$members)[grepl("homo", names(census_data$members), ignore.case = TRUE)]
 
-metadata <- census_data$members[[org_name]]$get("obs")
+metadata <- census_data$get(org_name)$get("obs")
 
 samples <- metadata$read(column_names = selected_columns,
                          value_filter = "is_primary_data == 'TRUE'")$concat()
@@ -57,8 +57,8 @@ samples <- samples |> as.data.frame() |> distinct()  |>
   mutate(organism = org_name) |>
   filter(!dataset_id %in% old_dataset_ids)
 
-saved <- samples |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/census_new_datasets_2025-01-30.parquet",
-                                compression = "zstd")
+saved <- samples |> arrow::write_parquet(glue::glue("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/census_new_datasets_{date}.parquet"),
+                                         compression = "zstd")
 
 
 # Set the base path where files will be downloaded
@@ -98,13 +98,15 @@ export PARALLEL_NO_TTY=1
 
 # Config to boost download speed
 aws configure set default.s3.max_bandwidth 70MB/s
+
+# Max 100 parallel HTTPs connections for one file
 aws configure set default.s3.max_concurrent_requests 100
 
 # Path to the file containing AWS S3 copy commands
 COMMAND_FILE='{output_file_path}'
 
-# Number of parallel downloads
-PARALLEL_DOWNLOADS=369
+# Number of parallel downloads. Try lower the variable here to avoid TCP limits
+PARALLEL_DOWNLOADS=20
 
 # Execute the download commands in parallel
 cat $COMMAND_FILE | parallel -j $PARALLEL_DOWNLOADS --eta --bar --plain --no-notice

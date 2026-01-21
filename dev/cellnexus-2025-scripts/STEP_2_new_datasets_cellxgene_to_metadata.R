@@ -3,8 +3,10 @@
 library(tidyverse)
 library(targets)
 library(glue)
+library(arrow)
+library(duckdb)
 
-result_directory = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025"
+result_directory = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026"
 
 tar_script({
   
@@ -187,9 +189,10 @@ tar_script({
       when(unique(.$dataset_id)=="e3a56e00-8417-4d82-9d35-3fab3aac12f2" ~ mutate(., SpecimenID =NA), ~ (.))  %>%
       when(unique(.$dataset_id)=="17b34e42-bbd2-494b-bf32-b9229344a3f6" ~ mutate(., Sample =NA), ~ (.))  %>%
       
+      
       # Fix huge samples for plate experiments
-      tidyr::extract(.cell, "experiment___", "(^expr?[0-9]+)", remove = F) |>
-      tidyr::extract(.cell, c("run_from_cell_id"), "(run[[:alnum:]_]+?)(?=_[ACGT]{5,}|-.+|$)", remove = FALSE) |> 
+      tidyr::extract(cell_, "experiment___", "(^expr?[0-9]+)", remove = F) |>
+      tidyr::extract(cell_, c("run_from_cell_id"), "(run[[:alnum:]_]+?)(?=_[ACGT]{5,}|-.+|$)", remove = FALSE) |> 
       
       mutate(experiment___ = if_else(dataset_id=="3fe53a40-38ff-4f25-b33b-e4d60f2289ef", experiment___, "")) |>
       mutate(run_from_cell_id = if_else(dataset_id=="d7f5d8d0-6150-48d7-b094-c34286ad11a1", "" , run_from_cell_id)) |>
@@ -236,9 +239,6 @@ tar_script({
       ), na.rm = TRUE, sep = "___", remove = F) |>
       
       
-      #parquet does not like . prefix
-      dplyr::rename(cell_ = .cell) |> 
-      
       # Add sample hash
       mutate(sample_ = getVDigest(algo="md5")(glue("{sample_heuristic}{dataset_id}"))) |>
       
@@ -251,7 +251,7 @@ tar_script({
   
   get_metadata = function(.x){
     
-    cache.path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/h5ad/2025-01-30/"
+    cache.path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/h5ad/2025-11-08/"
     
     dataset_id = as.character(unique(.x$dataset_id))
     
@@ -328,7 +328,7 @@ tar_script({
     # Track file changes
     tar_file(
       census_meta_file,
-      "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/census_new_datasets_2025-01-30.parquet",
+      "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/census_new_datasets_2025-11-08.parquet",
       deployment = "main"
     ),
     
@@ -488,9 +488,11 @@ job::job({
   
 })
 
-# tar_workspace(dataset_cell_dict_f796e2a5f0273991, script = glue("{result_directory}/_targets.R"),
+# tar_workspace(metadata_dataset_id_a2a343b326a16a34, script = glue("{result_directory}/_targets.R"),
 #               store = glue("{result_directory}/_targets"))
 # x =  get_metadata(files_dataset_id)
+# debugonce(sample_heuristics)
+# x |> sample_heuristics()
 # x |> mutate(cell_index = row_number(),
 #             new_cell_id = paste(dataset_id, cell_index, sep = "___"),
 #             cell_id_in_sample = paste(cell_, dataset_id, sep = "___")) 
@@ -500,6 +502,8 @@ job::job({
 
 
 cellxgene_annotations <- readRDS("~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cellxgene_annotations_to_keep.rds")
+file.copy("~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cellxgene_annotations_to_keep.rds", 
+          "~/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cellxgene_annotations_to_keep.rds")
 
 # dataset metadata
 tar_read(dataset_df, store = glue("{result_directory}/_targets"))|>
@@ -511,16 +515,16 @@ tar_read(dataset_df, store = glue("{result_directory}/_targets"))|>
       ~ purrr::pluck(.x, 1, "label", .default = NA_character_)
     )
   ) |>
-  write_parquet("~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/dataset.parquet",
+  write_parquet("~/cellxgene_curated/metadata_cellxgenedp_Jan_2026/dataset.parquet",
                 compression = "zstd")
 
 # # Sample to cell link
 tar_read(metadata_dataset_id_cell_to_sample_mapping, store = glue("{result_directory}/_targets"))|>
-  write_parquet("~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cell_ids_for_metadata.parquet",
+  write_parquet("~/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_ids_for_metadata.parquet",
                 compression = "zstd")
 
 tar_read(dataset_cell_dict, store = glue("{result_directory}/_targets"))|>bind_rows() |>
-  write_parquet("~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/dataset_cell_dict.parquet",
+  write_parquet("~/cellxgene_curated/metadata_cellxgenedp_Jan_2026/dataset_cell_dict.parquet",
                 compression = "zstd")
 
 get_tissue_grouped = function(tissue){
@@ -976,7 +980,7 @@ convert_age_labels_to_days <- function(labels) {
 age_days_tbl = 
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cell_ids_for_metadata.parquet')")
+    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_ids_for_metadata.parquet')")
   ) |> 
   select(-contains("joinid"), -contains("cell_")) |>
   distinct(development_stage) |> 
@@ -984,110 +988,110 @@ age_days_tbl =
   mutate(age_days = convert_age_labels_to_days(development_stage)) 
 
 age_days_tbl |>
-  write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/age_days.parquet")
+  write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/age_days.parquet")
 
 
 tissues_grouped = get_tissue_grouped() 
 
 tissues_grouped |>
-  write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/tissue_grouped.parquet")
+  write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/tissue_grouped.parquet")
 
-#
-cell_ids_for_metadata <- tbl(
-  dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cell_ids_for_metadata.parquet')")
-)
-
-# this metadata is generated in ~/git_control/cellNexus/dev/STEP_3_split_large_datasets_create_samples.R
-cell_to_refined_sample_from_Mengyuan <- tbl(
-  dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/2025-01-30_census_samples_to_download.parquet')")
-) |>
-  select(cell_, observation_joinid, dataset_id, sample_id) 
-
-
-# Establish a connection to DuckDB in memory
-job::job({
-  
-  con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-  
-  # Create views for each of the datasets in DuckDB
+# #
+# cell_ids_for_metadata <- tbl(
+#   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
+#   sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_ids_for_metadata.parquet')")
+# )
+# 
+# # this metadata is generated in ~/git_control/cellNexus/dev/STEP_3_split_large_datasets_create_samples.R
+# cell_to_refined_sample_from_Mengyuan <- tbl(
+#   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
+#   sql(glue::glue("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/{Date}_census_samples_to_download.parquet')"))
+# ) |>
+#   select(cell_, observation_joinid, dataset_id, sample_id) 
+# 
+# 
+# # Establish a connection to DuckDB in memory
+# job::job({
+#   
+#   con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+#   
+#   # Create views for each of the datasets in DuckDB
+# #   dbExecute(con, "
+# #   CREATE VIEW cell_to_refined_sample_from_Mengyuan AS
+# #   SELECT cell_, observation_joinid, dataset_id, sample_id, cell_type, cell_type_ontology_term_id
+# #   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/2025-11-08_census_samples_to_download.parquet')
+# # ")
+#   
 #   dbExecute(con, "
-#   CREATE VIEW cell_to_refined_sample_from_Mengyuan AS
-#   SELECT cell_, observation_joinid, dataset_id, sample_id, cell_type, cell_type_ontology_term_id
-#   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/2025-01-30_census_samples_to_download.parquet')
+#   CREATE VIEW cell_ids_for_metadata AS
+#   SELECT *
+#   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_ids_for_metadata.parquet')
 # ")
-  
-  dbExecute(con, "
-  CREATE VIEW cell_ids_for_metadata AS
-  SELECT *
-  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cell_ids_for_metadata.parquet')
-")
-  
-  dbExecute(con, "
-  CREATE VIEW sample_metadata AS
-  SELECT *
-  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/dataset.parquet')
-")
-  
-  dbExecute(con, "
-  CREATE VIEW age_days_tbl AS
-  SELECT development_stage, age_days
-  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/age_days.parquet')
-")
-  
-  dbExecute(con, "
-  CREATE VIEW tissue_grouped AS
-  SELECT tissue, tissue_groups
-  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/tissue_grouped.parquet')
-")
-  
-  # Perform optimised joins within DuckDB
-  copy_query <- "
-COPY (
-  SELECT 
-    cell_ids_for_metadata.*,
-    sample_metadata.*,
-    age_days_tbl.age_days,
-    tissue_grouped.tissue_groups,
-    'cellxgene' AS atlas_id
-  
-  FROM cell_ids_for_metadata
-  
-  -- LEFT JOIN cell_ids_for_metadata
-  --   ON cell_ids_for_metadata.cell_ = cell_to_refined_sample_from_Mengyuan.cell_
-  --   AND cell_ids_for_metadata.observation_joinid = cell_to_refined_sample_from_Mengyuan.observation_joinid
-  --   AND cell_ids_for_metadata.dataset_id = cell_to_refined_sample_from_Mengyuan.dataset_id
-  
-  LEFT JOIN sample_metadata
-    ON sample_metadata.dataset_id = cell_ids_for_metadata.dataset_id
-    AND sample_metadata.donor_id = cell_ids_for_metadata.donor_id
-    
-  LEFT JOIN age_days_tbl
-    ON age_days_tbl.development_stage = cell_ids_for_metadata.development_stage
-
-  LEFT JOIN tissue_grouped
-    ON tissue_grouped.tissue = cell_ids_for_metadata.tissue
-    
-) TO '/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cell_metadata.parquet'
-(FORMAT PARQUET, COMPRESSION 'gzip');
-"
-  
-  # Execute the final query to write the result to a Parquet file
-  dbExecute(con, copy_query)
-  
-  # Disconnect from the database
-  dbDisconnect(con, shutdown = TRUE)
-  
-})
-
-# system("~/bin/rclone copy /vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cell_metadata.parquet box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/")
-
-
-cell_metadata = tbl(
-  dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cell_metadata.parquet')")
-) 
+#   
+#   dbExecute(con, "
+#   CREATE VIEW sample_metadata AS
+#   SELECT *
+#   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/dataset.parquet')
+# ")
+#   
+#   dbExecute(con, "
+#   CREATE VIEW age_days_tbl AS
+#   SELECT development_stage, age_days
+#   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/age_days.parquet')
+# ")
+#   
+#   dbExecute(con, "
+#   CREATE VIEW tissue_grouped AS
+#   SELECT tissue, tissue_groups
+#   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/tissue_grouped.parquet')
+# ")
+#   
+#   # Perform optimised joins within DuckDB
+#   copy_query <- "
+# COPY (
+#   SELECT 
+#     cell_ids_for_metadata.*,
+#     sample_metadata.*,
+#     age_days_tbl.age_days,
+#     tissue_grouped.tissue_groups,
+#     'cellxgene' AS atlas_id
+#   
+#   FROM cell_ids_for_metadata
+#   
+#   -- LEFT JOIN cell_ids_for_metadata
+#   --   ON cell_ids_for_metadata.cell_ = cell_to_refined_sample_from_Mengyuan.cell_
+#   --   AND cell_ids_for_metadata.observation_joinid = cell_to_refined_sample_from_Mengyuan.observation_joinid
+#   --   AND cell_ids_for_metadata.dataset_id = cell_to_refined_sample_from_Mengyuan.dataset_id
+#   
+#   LEFT JOIN sample_metadata
+#     ON sample_metadata.dataset_id = cell_ids_for_metadata.dataset_id
+#     AND sample_metadata.donor_id = cell_ids_for_metadata.donor_id
+#     
+#   LEFT JOIN age_days_tbl
+#     ON age_days_tbl.development_stage = cell_ids_for_metadata.development_stage
+# 
+#   LEFT JOIN tissue_grouped
+#     ON tissue_grouped.tissue = cell_ids_for_metadata.tissue
+#     
+# ) TO '/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_metadata.parquet'
+# (FORMAT PARQUET, COMPRESSION 'gzip');
+# "
+#   
+#   # Execute the final query to write the result to a Parquet file
+#   dbExecute(con, copy_query)
+#   
+#   # Disconnect from the database
+#   dbDisconnect(con, shutdown = TRUE)
+#   
+# })
+# 
+# # system("~/bin/rclone copy /vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_metadata.parquet box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/")
+# 
+# 
+# cell_metadata = tbl(
+#   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
+#   sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_metadata.parquet')")
+# ) 
 
 
 
@@ -1132,9 +1136,9 @@ dbDisconnect(con, shutdown = TRUE)
 
 
 # Get Dharmesh metadata consensus
-# system("~/bin/rclone copy box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/consensus_output_new.parquet /vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/ ")
-# system("~/bin/rclone copy box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/data_driven_consensus_new.parquet /vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/ ")
-# system("~/bin/rclone copy box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/data_driven_consensus.parquet /vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/ ")
+# system("~/bin/rclone copy box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/consensus_output_new.parquet /vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/ ")
+# system("~/bin/rclone copy box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/data_driven_consensus_new.parquet /vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/ ")
+# system("~/bin/rclone copy box_adelaide:/Mangiola_ImmuneAtlas/reannotation_consensus/data_driven_consensus.parquet /vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/ ")
 
 
 # (Mengyuan: UNSURE ABOUT THE PURPOSE OF CODE BELOW)
@@ -1147,7 +1151,7 @@ non_immune_harmonisation =
 
 tbl(
   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/consensus_output_new.parquet')")
+  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/consensus_output_new.parquet')")
 ) |> 
   
   # Add non immune harmonisation to Dharmesh immune harmonisation
@@ -1156,12 +1160,12 @@ tbl(
   ) |> 
   mutate(reannotation_consensus = case_when(reannotation_consensus=="non immune" ~ non_immune_harmonised_cell_type, TRUE ~ reannotation_consensus)) |> 
   select(-non_immune_harmonised_cell_type) |> 
-  cellNexus:::duckdb_write_parquet(path = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/consensus_output_new_plus_non_immune_harmonisation.parquet")
+  cellNexus:::duckdb_write_parquet(path = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/consensus_output_new_plus_non_immune_harmonisation.parquet")
 
 
 annotation_with_harmonised <- tbl(
   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/consensus_output_new_plus_non_immune_harmonisation.parquet')")
+  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/consensus_output_new_plus_non_immune_harmonisation.parquet')")
 )
 
 
