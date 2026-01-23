@@ -135,19 +135,13 @@ job::job({
     CONCAT(cell_, '___', dataset_id) AS cell_,
     dataset_id,
     *
-  FROM read_parquet('/vast/scratch/users/shen.m/cellNexus_run/cell_metadata.parquet')
+  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_metadata.parquet')
 ")
-#   
-#   dbExecute(con, "
-#   CREATE VIEW cell_annotation AS
-#   SELECT cell_, blueprint_first_labels_fine, monaco_first_labels_fine, azimuth_predicted_celltype_l2
-#   FROM read_parquet('~/scratch/cache_temp/annotation_tbl_light.parquet')
-# ")
 
   dbExecute(con, "
   CREATE VIEW cell_map AS
   SELECT cell_, new_cell_id, cell_id_in_sample, dataset_id
-  FROM read_parquet('~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/dataset_cell_dict.parquet')
+  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/dataset_cell_dict.parquet')
 ")
   
   dbExecute(con, "
@@ -198,7 +192,7 @@ job::job({
         
       WHERE cell_metadata.dataset_id NOT IN ('99950e99-2758-41d2-b2c9-643edcdf6d82', '9fcb0b73-c734-40a5-be9c-ace7eea401c9') -- (THESE TWO DATASETS DOESNT contain meaningful data - no observation_joinid etc), thus was excluded in the final metadata.
          
-  ) TO  '~/scratch/cache_temp/cell_metadata_cell_type_consensus_v1_0_0_mengyuan.parquet'
+  ) TO  '~/scratch/cache_temp/cell_metadata_cell_type_consensus_v2_0_0_mengyuan.parquet'
   (FORMAT PARQUET, COMPRESSION 'gzip');
 "
   
@@ -216,12 +210,12 @@ job::job({
 cell_metadata = 
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-    sql("SELECT * FROM read_parquet('~/scratch/cache_temp/cell_metadata_cell_type_consensus_v1_0_0_mengyuan.parquet')")
+    sql("SELECT * FROM read_parquet('~/scratch/cache_temp/cell_metadata_cell_type_consensus_v2_0_0_mengyuan.parquet')")
   )
 
 library(targets)
 library(tidyverse)
-store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_0_1_single_cell"
+store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_2_0_0_single_cell"
 
 tar_script({
   library(dplyr)
@@ -741,19 +735,19 @@ tar_script({
   list(
     
     # The input DO NOT DELETE
-    tar_target(my_store, "/vast/scratch/users/shen.m/update_cellNexus_target_store", deployment = "main"),
-    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/10-12-2025", deployment = "main"),
+    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08", deployment = "main"),
+    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/23-01-2026", deployment = "main"),
     # This is the store for retrieving missing cells between cellnexus metadata and sce. A different store as it was done separately
     #tar_target(cache_directory, "/vast/scratch/users/shen.m/debug2/cellxgene/19-12-2024", deployment = "main"),
     tar_target(
       cell_metadata,
-      "~/scratch/cache_temp/cell_metadata_cell_type_consensus_v1_0_0_mengyuan.parquet", 
+      "~/scratch/cache_temp/cell_metadata_cell_type_consensus_v2_0_0_mengyuan.parquet", 
       packages = c( "arrow","dplyr","duckdb")
       
     ),
     tar_target(
       cell_id_dict,
-      "~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/dataset_cell_dict.parquet", 
+      "~/cellxgene_curated/metadata_cellxgenedp_Jan_2026/dataset_cell_dict.parquet", 
       packages = c( "arrow","dplyr","duckdb")
     ),
     
@@ -867,5 +861,5 @@ job::job({
 # cell_metadata |> filter(!cell_id %in% missing_cells) |> 
 #   
 #   # This method of save parquet to parquet is faster 
-#   cellNexus:::duckdb_write_parquet(path = "~/scratch/cache_temp/cell_metadata_cell_type_consensus_v1_0_0_filtered_missing_cells_mengyuan.parquet")
+#   cellNexus:::duckdb_write_parquet(path = "~/scratch/cache_temp/cell_metadata_cell_type_consensus_v2_0_0_filtered_missing_cells_mengyuan.parquet")
 # 

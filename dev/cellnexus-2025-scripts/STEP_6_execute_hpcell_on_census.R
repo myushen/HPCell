@@ -12,22 +12,22 @@ library(crew)
 library(crew.cluster)
 library(duckdb)
 
-version <- "2025-01-30"
+version <- "2025-11-08"
 directory = glue::glue("/vast/scratch/users/shen.m/Census/split_h5ad_based_on_sample_id/{version}/")
 
 downloaded_samples_tbl <- 
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/2025-01-30_census_samples_to_download.parquet')")
+    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/2025-11-08_census_samples_to_download.parquet')")
   ) |>
   collect() |> 
   mutate(file_name = file.path(directory, paste0(sample_id, ".h5ad")) |> as.character())
 
-result_directory = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/"
+result_directory = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/"
 
 sample_meta <- tbl(
   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/dataset.parquet')")
+  sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/dataset.parquet')")
 ) |> collect()
   
 sample_tbl = downloaded_samples_tbl |> left_join(CuratedAtlasQueryR::get_metadata(cache_directory = tempdir()) |> dplyr::select(dataset_id, contains("norm")) |>
@@ -62,11 +62,11 @@ sample_tbl <- sample_tbl |> left_join(sample_meta |> distinct(dataset_id, assay,
                              x_normalization == "normalized" ~ "round negative value to 0"
   ))
 
-sample_tbl <- saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/sample_tbl.rds")
+sample_tbl <- saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/sample_tbl.rds")
 
 
-sample_tbl <- readRDS("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/sample_tbl.rds")
-sample_summary_df <- arrow::read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Dec_2025/sample_distribution_summary.parquet")
+sample_tbl <- readRDS("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/sample_tbl.rds")
+sample_summary_df <- arrow::read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/sample_distribution_summary.parquet")
 #sample_tbl = sample_tbl |> head()
 # Infer missing x_approximate_distribution 
 impute_x_approximate_distribution <- function(df) {
@@ -107,20 +107,25 @@ sample_tbl = sample_tbl |> left_join(sample_summary_df |> mutate(sample_id = str
                                         inferred_distribution == "raw" ~ "identity"))
 
 
-# Investigate further: One dataset resulting 21 samples has all annotations NA. why? assumption is metadata missing this dataset_id in calculating summary_count_df?
-sample_tbl |> dplyr::filter(inferred_distribution |> is.na(), is.na(x_approximate_distribution),  is.na(has_negative),  is.na(max_gt_20),  is.na(all_integer), is.na(has_floating)) |> distinct(dataset_id, sample_id)
+# Datasets missing colData are excluded.
+dataset_to_exclude <- sample_tbl |> dplyr::filter(inferred_distribution |> is.na(), 
+                                                  is.na(x_approximate_distribution),  
+                                                  is.na(has_negative),  is.na(max_gt_20),  
+                                                  is.na(all_integer), is.na(has_floating)) |>
+  pull(dataset_id) |> unique()
 
 # setwd(glue("{store}"))
 sliced_sample_tbl = 
   sample_tbl |> 
-  filter(!dataset_id %in% c("99950e99-2758-41d2-b2c9-643edcdf6d82", "9fcb0b73-c734-40a5-be9c-ace7eea401c9" )) |> 
-  dplyr::select(file_name, dataset_id, sample_id, method_to_apply, assay, feature_thresh, count_upper_bound)
+  filter(!dataset_id %in% dataset_to_exclude) |> 
+  dplyr::select(file_name, dataset_id, sample_id, method_to_apply, assay, feature_thresh, count_upper_bound, list_length)
 
 
 sliced_sample_tbl <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sliced_sample_tbl.rds")
 
 sliced_sample_tbl <- readRDS("/vast/scratch/users/shen.m/cellNexus_run/sliced_sample_tbl.rds")
-sliced_sample_tbl = sliced_sample_tbl |> head(2) |> bind_rows(sliced_sample_tbl |> filter(count_upper_bound == 10) |> head(2))
+sliced_sample_tbl = sliced_sample_tbl |> filter(list_length < 1000) |> head()
+  #head(2) |> bind_rows(sliced_sample_tbl |> filter(count_upper_bound == 10) |> head(2))
 
 # Enable sample_names.rds to store sample names for the input
 sample_names <-
@@ -132,12 +137,12 @@ functions = sliced_sample_tbl |> pull(method_to_apply)
 feature_thresh = sliced_sample_tbl |> pull(feature_thresh)
 count_upper_bound = sliced_sample_tbl |> pull(count_upper_bound)
 
-sample_names <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sample_names_filtered_by_mengyuan_apr_2024.rds")
-functions <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/functions.rds")
-feature_thresh <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/feature_thresh.rds")
-count_upper_bound <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/count_upper_bound.rds")
+# sample_names <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sample_names_filtered_by_mengyuan_apr_2024.rds")
+# functions <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/functions.rds")
+# feature_thresh <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/feature_thresh.rds")
+# count_upper_bound <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/count_upper_bound.rds")
 
-my_store = "/vast/scratch/users/shen.m/update_cellNexus_target_store"
+my_store = glue::glue("/vast/scratch/users/shen.m/cellNexus_target_store_{version}")
 job::job({
   
   library(HPCell)
@@ -158,10 +163,7 @@ job::job({
           crashes_error = 10,
           options_cluster = crew.cluster::crew_options_slurm(
             memory_gigabytes_required = c(20, 35, 50, 75, 100, 150), 
-            #memory_gigabytes_required = c(90, 100, 120, 150, 200,240), 
-            #memory_gigabytes_required = c(60, 80, 100, 150, 200), 
-            # memory_gigabytes_required = c(45, 60, 75, 100, 120, 150), 
-            cpus_per_task = c(2),
+            cpus_per_task = c(2, 2, 5, 6, 7, 10),
             time_minutes = c(60*24, 60*24, 60*24, 60*24, 60*24,60*24),
             verbose = T
           )
@@ -181,26 +183,26 @@ job::job({
     # # Remove empty outliers based on RNA count threshold per cell
     remove_empty_threshold(target_input = "sce_transformed", RNA_feature_threshold = feature_thresh) |>
     
-    # # Annotation
-    # annotate_cell_type(target_input = "sce_transformed", azimuth_reference = "pbmcref") |> 
-    # 
-    # # Cell type harmonisation
-    # celltype_consensus_constructor(target_input = "sce_transformed",
-    #                                target_output = "cell_type_concensus_tbl") |>
-    # 
-    # # Alive identification
-    # remove_dead_scuttle(target_input = "sce_transformed", target_annotation = "cell_type_concensus_tbl",
-    #                     group_by = "cell_type_unified_ensemble") |>
-    # 
-    # # Doublets identification
-    # remove_doublets_scDblFinder(target_input = "sce_transformed") |>
-    # 
-    # # Pseudobulk
-    # calculate_pseudobulk(target_input = "sce_transformed",
-    #                      group_by = "cell_type_unified_ensemble") |>
-    # 
-    # # metacell
-    # cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
+    # Annotation
+    annotate_cell_type(target_input = "sce_transformed", azimuth_reference = "pbmcref") |>
+
+    # Cell type harmonisation
+    celltype_consensus_constructor(target_input = "sce_transformed",
+                                   target_output = "cell_type_concensus_tbl") |>
+
+    # Alive identification
+    remove_dead_scuttle(target_input = "sce_transformed", target_annotation = "cell_type_concensus_tbl",
+                        group_by = "cell_type_unified_ensemble") |>
+
+    # Doublets identification
+    remove_doublets_scDblFinder(target_input = "sce_transformed") |>
+
+    # Pseudobulk
+    calculate_pseudobulk(target_input = "sce_transformed",
+                         group_by = "cell_type_unified_ensemble") |>
+
+    # metacell
+    cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
     # 
     # # Cell Chat
     # ligand_receptor_cellchat(target_input = "sce_transformed",
@@ -217,7 +219,7 @@ tar_meta(starts_with("annotation_tbl_"), store = "/vast/scratch/users/shen.m/cel
   filter(!data |> is.na()) |> arrange(desc(time)) |> select(error, name)
 
 # Debug cellchat
-tar_workspace(pseudobulk_se_iterated_10b5116a0573324b, store = my_store, 
+tar_workspace(pseudobulk_se_iterated_3b741ea964ed386d, store = my_store, 
               script = paste0(my_store,".R"))
 debugonce(create_pseudobulk)
 create_pseudobulk(sce_transformed, sample_names, empty_tbl, alive_tbl, NULL, annotation_tbl, 
@@ -345,7 +347,7 @@ tar_script({
   list(
     
     # The input DO NOT DELETE
-    tar_target(my_store, "/vast/scratch/users/shen.m/update_cellNexus_target_store", deployment = "main"),
+    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08", deployment = "main"),
     
     tar_target(
       target_name,
@@ -369,13 +371,13 @@ tar_script({
   )
   
   
-}, script = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target.R", ask = FALSE)
+}, script = glue::glue("/vast/scratch/users/shen.m/lighten_annotation_tbl_target_{version}.R"), ask = FALSE)
 
 job::job({
   
   tar_make(
-    script = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target.R", 
-    store = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target", 
+    script = glue::glue("/vast/scratch/users/shen.m/lighten_annotation_tbl_target_{version}.R"),
+    store = glue::glue("/vast/scratch/users/shen.m/lighten_annotation_tbl_target_{version}"), 
     reporter = "summary"
   )
   
@@ -416,14 +418,14 @@ cellNexus:::duckdb_write_parquet = function(data_tbl, output_parquet, compressio
 cell_metadata <- 
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-    sql("SELECT * FROM read_parquet('/vast/scratch/users/shen.m/cellNexus_run/cell_metadata.parquet')")
+    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_metadata.parquet')")
   ) |>
   mutate(cell_ = paste0(cell_, "___", dataset_id)) |> 
   select(cell_, observation_joinid, contains("cell_type"), dataset_id,  self_reported_ethnicity, tissue, donor_id,  sample_id, is_primary_data, assay)
 
 
 cell_annotation = 
-  tar_read(annotation_tbl_light, store = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target") |> 
+  tar_read(annotation_tbl_light, store = glue::glue("/vast/scratch/users/shen.m/lighten_annotation_tbl_target_{version}")) |> 
   dplyr::rename(
     blueprint_first_labels_fine = blueprint_first.labels.fine, 
     monaco_first_labels_fine = monaco_first.labels.fine, 
@@ -441,22 +443,22 @@ cell_annotation |> arrow::write_parquet("~/scratch/cache_temp/annotation_tbl_lig
                                         compression = "zstd")
 
 empty_droplet = 
-  tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/update_cellNexus_target_store") |>
+  tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 alive_cells = 
-  tar_read(alive_tbl, store = "/vast/scratch/users/shen.m/update_cellNexus_target_store") |>
+  tar_read(alive_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 doublet_cells =
-  tar_read(doublet_tbl, store = "/vast/scratch/users/shen.m/update_cellNexus_target_store") |>
+  tar_read(doublet_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 metacell = 
-  tar_read(metacell_tbl, store = "/vast/scratch/users/shen.m/update_cellNexus_target_store") |> 
+  tar_read(metacell_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |> 
   bind_rows() |> 
   dplyr::rename(cell_ = cell) |> 
   dplyr::rename_with(
@@ -465,7 +467,7 @@ metacell =
   )
 
 # Save cell type concensus tbl from HPCell output to disk
-cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = "/vast/scratch/users/shen.m/update_cellNexus_target_store") |>  
+cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>  
   bind_rows() |> 
   dplyr::rename(cell_ = .cell)
 
