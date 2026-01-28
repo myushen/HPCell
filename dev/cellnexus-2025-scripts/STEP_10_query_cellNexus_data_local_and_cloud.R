@@ -7,6 +7,10 @@ cache = "~/scratch/cache_temp"
 
 x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "~/scratch/cache_temp/metadata.2.0.0.parquet")
 sce = x |>
+  dplyr::filter(
+    self_reported_ethnicity == "Brazilian" &
+      assay |> stringr::str_like("%10x%")
+  ) |> 
   get_single_cell_experiment(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL)
 
 # Check the number of cells per dataset

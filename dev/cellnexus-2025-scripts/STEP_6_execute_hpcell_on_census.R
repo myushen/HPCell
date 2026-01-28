@@ -162,7 +162,7 @@ job::job({
           seconds_idle = 30,
           crashes_error = 10,
           options_cluster = crew.cluster::crew_options_slurm(
-            memory_gigabytes_required = c(20, 35, 50, 75, 100, 150), 
+            memory_gigabytes_required = c(60, 80, 100, 120, 150, 200), 
             cpus_per_task = c(2, 2, 5, 6, 7, 10),
             time_minutes = c(60*24, 60*24, 60*24, 60*24, 60*24,60*24),
             verbose = T
@@ -443,22 +443,22 @@ cell_annotation |> arrow::write_parquet("~/scratch/cache_temp/annotation_tbl_lig
                                         compression = "zstd")
 
 empty_droplet = 
-  tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>
+  tar_read(empty_tbl, store = glue::glue("/vast/scratch/users/shen.m/cellNexus_target_store_{version}")) |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 alive_cells = 
-  tar_read(alive_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>
+  tar_read(alive_tbl, store = glue::glue("/vast/scratch/users/shen.m/cellNexus_target_store_{version}")) |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 doublet_cells =
-  tar_read(doublet_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>
+  tar_read(doublet_tbl, store = glue::glue("/vast/scratch/users/shen.m/cellNexus_target_store_{version}")) |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 metacell = 
-  tar_read(metacell_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |> 
+  tar_read(metacell_tbl, store = glue::glue("/vast/scratch/users/shen.m/cellNexus_target_store_{version}")) |> 
   bind_rows() |> 
   dplyr::rename(cell_ = cell) |> 
   dplyr::rename_with(
@@ -467,7 +467,7 @@ metacell =
   )
 
 # Save cell type concensus tbl from HPCell output to disk
-cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08") |>  
+cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = glue::glue("/vast/scratch/users/shen.m/cellNexus_target_store_{version}")) |>  
   bind_rows() |> 
   dplyr::rename(cell_ = .cell)
 
@@ -514,11 +514,11 @@ cell_metadata_joined2 |>
                        compression = "zstd")
 
 # Cellchat output
-ligand_receptor_tbl = tar_read(ligand_receptor_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store") |> bind_rows()
-# save
-con <- dbConnect(duckdb::duckdb(), dbdir = "~/cellxgene_curated/metadata_cellxgene_mengyuan/cellNexus_lr_signaling_pathway_strength.duckdb")
-duckdb::dbWriteTable(con, "lr_pathway_table", ligand_receptor_tbl, overwrite = TRUE)
-dbDisconnect(con)
+ligand_receptor_tbl = tar_read(ligand_receptor_tbl, store = glue::glue("/vast/scratch/users/shen.m/cellNexus_target_store_{version}")) |> bind_rows()
+# # save
+# con <- dbConnect(duckdb::duckdb(), dbdir = "~/cellxgene_curated/metadata_cellxgene_mengyuan/cellNexus_lr_signaling_pathway_strength.duckdb")
+# duckdb::dbWriteTable(con, "lr_pathway_table", ligand_receptor_tbl, overwrite = TRUE)
+# dbDisconnect(con)
 
 
 

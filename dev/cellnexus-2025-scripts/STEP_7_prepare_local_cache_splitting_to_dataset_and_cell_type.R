@@ -190,7 +190,8 @@ job::job({
         AND file_id_cellNexus_single_cell.dataset_id = cell_annotation.dataset_id
         AND file_id_cellNexus_single_cell.cell_type_unified_ensemble = cell_annotation.cell_type_unified_ensemble
         
-      WHERE cell_metadata.dataset_id NOT IN ('99950e99-2758-41d2-b2c9-643edcdf6d82', '9fcb0b73-c734-40a5-be9c-ace7eea401c9') -- (THESE TWO DATASETS DOESNT contain meaningful data - no observation_joinid etc), thus was excluded in the final metadata.
+      -- (THESE DATASETS DOESNT contain meaningful data - no observation_joinid etc), thus was excluded in the final metadata.
+      WHERE cell_metadata.dataset_id NOT IN ('99950e99-2758-41d2-b2c9-643edcdf6d82', '9fcb0b73-c734-40a5-be9c-ace7eea401c9', '60a29d0b-1a37-4447-ac32-00d701580b47', '09b518f9-da64-44cc-aec8-70a89d55611f', 'cb252df6-6e49-4553-abd1-495a00006fb1') 
          
   ) TO  '~/scratch/cache_temp/cell_metadata_cell_type_consensus_v2_0_0_mengyuan.parquet'
   (FORMAT PARQUET, COMPRESSION 'gzip');
@@ -736,7 +737,7 @@ tar_script({
     
     # The input DO NOT DELETE
     tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08", deployment = "main"),
-    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/23-01-2026", deployment = "main"),
+    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/27-01-2026", deployment = "main"),
     # This is the store for retrieving missing cells between cellnexus metadata and sce. A different store as it was done separately
     #tar_target(cache_directory, "/vast/scratch/users/shen.m/debug2/cellxgene/19-12-2024", deployment = "main"),
     tar_target(

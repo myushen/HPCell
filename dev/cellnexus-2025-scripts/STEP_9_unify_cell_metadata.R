@@ -19,7 +19,7 @@ library(stringr)
 library(targets)
 library(purrr)
 
-DATE = "23-01-2026"
+DATE = "27-01-2026"
 # read cellxgene
 metadata <- tbl(
   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
@@ -104,8 +104,9 @@ metadata_path = "~/scratch/cache_temp/metadata.2.0.0.parquet"
 
 metadata |> 
   
-  # FOR TEST PURPOSE ONLY
-  filter(sample_id %in% c("33d4a2710fb8948869d08ca75e37e45c", "cc1e586b9c87063ab3093b1ac1d9709a", "b2b55590f75de8a9d2d761dc2b686162", "375536d1c72b71e5bf15249bef36768c","000bd8e4dd99245dc10f8a241202fdd5", "c5098f61b637d7f97c28c0900568d51a")) |>
+  # # FOR TEST PURPOSE ONLY
+  # filter(sample_id %in% c("33d4a2710fb8948869d08ca75e37e45c", "cc1e586b9c87063ab3093b1ac1d9709a", "b2b55590f75de8a9d2d761dc2b686162", "375536d1c72b71e5bf15249bef36768c","000bd8e4dd99245dc10f8a241202fdd5", "c5098f61b637d7f97c28c0900568d51a")) |>
+  # 
   duckdb_write_parquet(path = metadata_path,
                        con = dbConnect(duckdb::duckdb(), dbdir = ":memory:"))
 

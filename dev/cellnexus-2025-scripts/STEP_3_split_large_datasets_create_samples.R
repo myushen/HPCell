@@ -321,6 +321,7 @@ COPY (
   LEFT JOIN sample_metadata
     ON sample_metadata.dataset_id = cell_ids_for_metadata.dataset_id
     AND sample_metadata.donor_id = cell_ids_for_metadata.donor_id
+    AND sample_metadata.assay = cell_ids_for_metadata.assay
     
   LEFT JOIN age_days_tbl
     ON age_days_tbl.development_stage = cell_ids_for_metadata.development_stage
