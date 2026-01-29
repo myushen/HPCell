@@ -19,7 +19,6 @@ transform_assay.HPCell = function(
 ) {
   
   fx |> saveRDS("temp_fx.rds")
-  scale_max |> saveRDS("count_upper_bound.rds")
   
   input_hpc |> 
     
@@ -40,8 +39,7 @@ transform_assay.HPCell = function(
       input_read_RNA_assay = "data_object" |> is_target(), 
       transform_fx = "transform" |> is_target()  ,
       external_path = glue("{input_hpc$initialisation$store}/external") |> as.character(),
-      container_type = "data_container_type" |> is_target() ,
-      scale_max = "count_upper_bound" |> is_target()
+      container_type = "data_container_type" |> is_target() 
       
     )
   
