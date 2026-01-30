@@ -124,7 +124,7 @@ sliced_sample_tbl =
 sliced_sample_tbl <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sliced_sample_tbl.rds")
 
 sliced_sample_tbl <- readRDS("/vast/scratch/users/shen.m/cellNexus_run/sliced_sample_tbl.rds")
-sliced_sample_tbl = sliced_sample_tbl |> filter(list_length < 1000) |> head()
+# sliced_sample_tbl = sliced_sample_tbl |> filter(list_length < 1000) |> head()
   #head(2) |> bind_rows(sliced_sample_tbl |> filter(count_upper_bound == 10) |> head(2))
 
 # Enable sample_names.rds to store sample names for the input

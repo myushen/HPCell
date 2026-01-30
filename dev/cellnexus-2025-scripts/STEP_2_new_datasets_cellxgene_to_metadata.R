@@ -509,12 +509,9 @@ file.copy("~/cellxgene_curated/metadata_cellxgenedp_Dec_2025/cellxgene_annotatio
 tar_read(dataset_df, store = glue("{result_directory}/_targets"))|>
   select(any_of(cellxgene_annotations)) |>
   unnest(donor_id) |> 
-  mutate(
-    assay = purrr::map_chr(
-      assay,
-      ~ purrr::pluck(.x, 1, "label", .default = NA_character_)
-    )
-  ) |>
+  # One donor in a dataset have more than one assay, get all assays.
+  unnest(assay) |>
+  mutate(assay = purrr::map_chr(assay, "label"))  |>
   write_parquet("~/cellxgene_curated/metadata_cellxgenedp_Jan_2026/dataset.parquet",
                 compression = "zstd")
 

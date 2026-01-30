@@ -97,13 +97,13 @@ cellxgene_dataset =
 #   filter(dataset_id %in% c("d7f5d8d0-6150-48d7-b094-c34286ad11a1", "72955cdb-bd92-4135-aa52-21f33f9640db")) 
 
 
-sample_to_cell_primary =
+sample_to_cell =
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
     sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_ids_for_metadata.parquet')")
-  )
+  ) 
 
-sample_to_cell_primary = sample_to_cell_primary |> left_join(cellxgene_dataset, by = c("dataset_id", "donor_id", "assay"),
+sample_to_cell = sample_to_cell |> left_join(cellxgene_dataset, by = c("dataset_id", "donor_id", "assay"),
                                                              copy = T) |> 
   
   # Discard mismatch samples
@@ -236,14 +236,15 @@ sample_to_cell_primary = sample_to_cell_primary |> left_join(cellxgene_dataset, 
 #   distinct() 
 
 # This is important: please make sure observation_joinid and cell_ is unique per sample (sample_2) in census_samples_to_download
-sample_to_cell_primary |> dplyr::count(observation_joinid, sample_) |> dplyr::count(n)
-sample_to_cell_primary |> dplyr::count(cell_, sample_) |> dplyr::count(n)
+sample_to_cell |> dplyr::count(observation_joinid, sample_) |> dplyr::count(n)
+sample_to_cell |> dplyr::count(cell_, sample_) |> dplyr::count(n)
 # If above step return not unique, go to diagnostic script: ~/git_control/cellNexus/dev/optional_diagnose_duplicate_cell_ids_in_step3.R
 
 # Check cell count per sample, if a sample has cell more than 1e6, possibly missed a special spliter in STEP2/sample_heuristic function
-sample_to_cell_primary |> dplyr::count(sample_id) |> arrange(desc(n))
+sample_to_cell |> dplyr::count(sample_id) |> arrange(desc(n))
 
-sample_to_cell_primary |>
+sample_to_cell |>
+  filter(is_primary_data) |>
   group_by(dataset_id, sample_id, assay)  |>
   summarise(observation_joinid = list(observation_joinid), .groups = "drop") |> 
   collect() |> 
@@ -328,6 +329,8 @@ COPY (
 
   LEFT JOIN tissue_grouped
     ON tissue_grouped.tissue = cell_ids_for_metadata.tissue
+  
+  WHERE cell_ids_for_metadata.is_primary_data = TRUE
     
 ) TO '/vast/projects/cellxgene_curated/metadata_cellxgenedp_Jan_2026/cell_metadata.parquet'
 (FORMAT PARQUET, COMPRESSION 'gzip');
