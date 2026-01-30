@@ -89,13 +89,11 @@ sample_names <-
   set_names(sliced_sample_tbl |> pull(sample_2))
 functions = sliced_sample_tbl |> pull(method_to_apply)
 feature_thresh = sliced_sample_tbl |> pull(feature_thresh)
-count_upper_bound = sliced_sample_tbl |> pull(count_upper_bound)
 
 
 sample_names <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sample_names_filtered_by_mengyuan_apr_2024.rds")
 functions <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/functions.rds")
 feature_thresh <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/feature_thresh.rds")
-count_upper_bound <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/count_upper_bound.rds")
 
 my_store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul"
 job::job({
