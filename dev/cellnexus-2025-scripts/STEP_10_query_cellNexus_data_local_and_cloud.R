@@ -22,3 +22,17 @@ x |> dplyr::count(sample_id) |> dplyr::count(n>10)
 # Check whether cell_id strategt is implemented
 x |> select(cell_id) |> arrange(cell_id)
 
+# Check QC metrics
+x |> dplyr::count(empty_droplet, alive, scDblFinder.class)
+
+# Check empty droplet ratio
+x |> dplyr::count(empty_droplet) |>
+  collect() |> mutate(n_cells = sum(n), pct = n / n_cells * 100)
+
+# Check alive ratio
+x |> filter(!empty_droplet) |> dplyr::count(alive) |> 
+  collect() |> mutate(n_cells = sum(n), pct = n / n_cells * 100)
+
+# Check doublet ratio
+x |> filter(!empty_droplet, alive) |> dplyr::count(scDblFinder.class) |> 
+  collect() |> mutate(n_cells = sum(n), pct = n / n_cells * 100)

@@ -737,7 +737,7 @@ tar_script({
     
     # The input DO NOT DELETE
     tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store_2025-11-08", deployment = "main"),
-    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/27-01-2026", deployment = "main"),
+    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/08-11-2025", deployment = "main"), # date should match census release
     # This is the store for retrieving missing cells between cellnexus metadata and sce. A different store as it was done separately
     #tar_target(cache_directory, "/vast/scratch/users/shen.m/debug2/cellxgene/19-12-2024", deployment = "main"),
     tar_target(

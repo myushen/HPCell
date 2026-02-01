@@ -19,7 +19,7 @@ library(stringr)
 library(targets)
 library(purrr)
 
-DATE = "27-01-2026"
+DATE = "08-11-2025"
 # read cellxgene
 metadata <- tbl(
   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
