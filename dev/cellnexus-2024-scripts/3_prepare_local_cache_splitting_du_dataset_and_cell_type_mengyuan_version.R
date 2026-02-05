@@ -119,10 +119,9 @@ job::job({
   # FOR MENGYUAN CELL_METADATA COULD BE BIGGER THAN CELL_ANNOTATION
   
   get_file_ids(
-    "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation.parquet"
-    # "/vast/scratch/users/shen.m/Census_final_run/cell_annotation_new_substitute_cell_type_na_to_unknown_2.parquet"
+    "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet"
   )  |> 
-    write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cellNexus_single_cell.parquet")
+    write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cellNexus_single_cell_2024_Jul.parquet")
   
   gc()
   
@@ -147,7 +146,7 @@ job::job({
   dbExecute(con, "
   CREATE VIEW empty_droplet_df AS
   SELECT *
-  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation.parquet')
+  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet')
 ")
   
   dbExecute(con, "

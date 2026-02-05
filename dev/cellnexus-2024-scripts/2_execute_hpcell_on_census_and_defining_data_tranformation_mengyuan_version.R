@@ -91,9 +91,9 @@ functions = sliced_sample_tbl |> pull(method_to_apply)
 feature_thresh = sliced_sample_tbl |> pull(feature_thresh)
 
 
-sample_names <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sample_names_filtered_by_mengyuan_apr_2024.rds")
-functions <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/functions.rds")
-feature_thresh <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/feature_thresh.rds")
+# sample_names <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sample_names_filtered_by_mengyuan_apr_2024.rds")
+# functions <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/functions.rds")
+# feature_thresh <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/feature_thresh.rds")
 
 my_store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul"
 job::job({
@@ -160,9 +160,9 @@ job::job({
     # metacell
     cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
 
-    # # Cell Chat
-    # ligand_receptor_cellchat(target_input = "sce_transformed",
-    #                          group_by = "cell_type_unified_ensemble") |>
+    # Cell Chat
+    ligand_receptor_cellchat(target_input = "sce_transformed",
+                             group_by = "cell_type_unified_ensemble") |>
     
     print()
   
@@ -297,7 +297,7 @@ tar_script({
   list(
     
     # The input DO NOT DELETE
-    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store", deployment = "main"),
+    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul", deployment = "main"),
     
     tar_target(
       target_name,
@@ -321,13 +321,13 @@ tar_script({
   )
   
   
-}, script = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target.R", ask = FALSE)
+}, script = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target_2024_Jul.R", ask = FALSE)
 
 job::job({
   
   tar_make(
-    script = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target.R", 
-    store = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target", 
+    script = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target_2024_Jul.R", 
+    store = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target_2024_Jul", 
     reporter = "summary"
   )
   
@@ -368,14 +368,14 @@ cellNexus:::duckdb_write_parquet = function(data_tbl, output_parquet, compressio
 cell_metadata <- 
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-    sql("SELECT * FROM read_parquet('/vast/scratch/users/shen.m/cellNexus_run/cell_metadata.parquet')")
+    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgenedp_Apr_2024/cell_metadata.parquet')")
   ) |>
   mutate(cell_ = paste0(cell_, "___", dataset_id)) |> 
   select(cell_, observation_joinid, contains("cell_type"), dataset_id,  self_reported_ethnicity, tissue, donor_id,  sample_id, is_primary_data, assay)
 
 
 cell_annotation = 
-  tar_read(annotation_tbl_light, store = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target") |> 
+  tar_read(annotation_tbl_light, store = "/vast/scratch/users/shen.m/lighten_annotation_tbl_target_2024_Jul") |> 
   dplyr::rename(
     blueprint_first_labels_fine = blueprint_first.labels.fine, 
     monaco_first_labels_fine = monaco_first.labels.fine, 
@@ -387,47 +387,34 @@ cell_annotation = cell_annotation |> mutate(
   monaco_first_labels_fine = ifelse(is.na(monaco_first_labels_fine), "Other", monaco_first_labels_fine),
   azimuth_predicted_celltype_l2=ifelse(is.na(azimuth_predicted_celltype_l2), "Other", azimuth_predicted_celltype_l2))
 
-cell_annotation |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/annotation_tbl_light.parquet",
-                                        compression = "zstd")
+cell_annotation |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/annotation_tbl_light.parquet", compression = "zstd")
 
 empty_droplet = 
-  tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store") |>
+  tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 alive_cells = 
-  tar_read(alive_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store") |>
+  tar_read(alive_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 doublet_cells =
-  tar_read(doublet_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store") |>
+  tar_read(doublet_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 metacell = 
-  tar_read(metacell_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store") |> 
+  tar_read(metacell_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |> 
   bind_rows() |> 
   dplyr::rename(cell_ = cell) |> 
-  dplyr::rename(metacell_2 = gamma2,
-         metacell_4 = gamma4,
-         metacell_8 = gamma8,
-         metacell_16 = gamma16,
-         metacell_32 = gamma32,
-         metacell_64 = gamma64,
-         metacell_128 = gamma128,
-         metacell_256 = gamma256,
-         metacell_512 = gamma512,
-         metacell_1024 = gamma1024,
-         metacell_2048 = gamma2048,
-         metacell_4096 = gamma4096,
-         metacell_8192 = gamma8192,
-         metacell_16384 = gamma16384,
-         metacell_32768 = gamma32768, 
-         metacell_65536 = gamma65536)
+  dplyr::rename_with(
+    ~ stringr::str_replace(.x, "^gamma", "metacell_"),
+    starts_with("gamma")
+  )
 
 # Save cell type concensus tbl from HPCell output to disk
-cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store") |>  
+cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>  
   bind_rows() |> 
   dplyr::rename(cell_ = .cell)
 
@@ -435,9 +422,6 @@ cell_type_concensus_tbl = cell_type_concensus_tbl |> mutate(cell_type_unified_en
                                     ifelse(is.na(cell_type_unified_ensemble),
                                            "Unknown",
                                            cell_type_unified_ensemble)) 
-
-cell_type_concensus_tbl |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_type_concensus_tbl_from_hpcell.parquet",
-                                                compression = "zstd")
 
 # This command needs a big memory machine
 cell_metadata_joined = cell_metadata |> 
@@ -463,11 +447,11 @@ cell_metadata_joined2 = cell_metadata_joined |> as_tibble() |>
 
 # (!!!!) WHENEVER MAKE CHANGES, ALWAYS INCLUDE NEW Rhapsody DATA. Rhapsody TECH WERE UPDATED SEPARATELY in 2_1_rerun_hpcell_for_Rhapsody_targeted_panel.R. 
 cell_metadata_joined2 |>
-  arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation.parquet",
+  arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet",
                        compression = "zstd")
 
 # Cellchat output
-ligand_receptor_tbl = tar_read(ligand_receptor_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store") |> bind_rows()
+ligand_receptor_tbl = tar_read(ligand_receptor_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |> bind_rows()
 # save
 con <- dbConnect(duckdb::duckdb(), dbdir = "~/cellxgene_curated/metadata_cellxgene_mengyuan/cellNexus_lr_signaling_pathway_strength.duckdb")
 duckdb::dbWriteTable(con, "lr_pathway_table", ligand_receptor_tbl, overwrite = TRUE)
