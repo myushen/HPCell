@@ -378,12 +378,14 @@ annotate_cell_type.HPCell = function(input_hpc, azimuth_reference = NULL, target
 
 # Define the generic function
 #' @export
-normalise_abundance_seurat_SCT <- function(input_hpc, target_input = "data_object", target_output = "sct_matrix", ...) {
+normalise_abundance_seurat_SCT <- function(input_hpc, target_input = "data_object", 
+                                           target_output = "sct_matrix", ...) {
   UseMethod("normalise_abundance_seurat_SCT")
 }
 
 #' @export
-normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress = NULL, target_input = "data_object", target_output = "sct_matrix", ...) {
+normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress = NULL, target_input = "data_object", 
+                                                 target_output = "sct_matrix", ...) {
   
   input_hpc |> 
   hpc_iterate(
@@ -392,9 +394,11 @@ normalise_abundance_seurat_SCT.HPCell = function(input_hpc, factors_to_regress =
     input_read_RNA_assay = target_input |> is_target(), 
     empty_droplets_tbl = "empty_tbl" |> is_target() ,
     alive_identification_tbl = "alive_tbl" |> is_target(),
-    cell_cycle_score_tbl = "cell_cycle_tbl" |> is_target(),
+    doublet_identification_tbl = "doublet_tbl" |> is_target(),
+    # cell_cycle_score_tbl = "cell_cycle_tbl" |> is_target(),
     factors_to_regress = factors_to_regress,
     external_path = glue("{input_hpc$initialisation$store}/external"),
+    container_type = "data_container_type" |> is_target() ,
     ...
   )
   
