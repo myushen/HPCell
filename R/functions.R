@@ -962,21 +962,28 @@ cell_cycle_scoring <- function(input_read_RNA_assay,
 #' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
 #' @param empty_droplets_tbl A tibble identifying empty droplets.
 #' @param alive_identification_tbl A tibble from alive cell identification.
+#' @param doublet_identification_tbl A tibble from doublet identification.
 #' @param cell_cycle_score_tbl A tibble from cell cycle scoring.
 #' @param assay assay used, default = "RNA" 
+#' @param factors_to_regress A character vector specifying cell-level covariates to regress out during `SCTransform` normalization.
+#' @param external_path A character vector of directory that the data to be stored
+#' @param data_container_type A character vector specifying the output file type. Ideally it should match to the input file type.
 #'
 #' @return Normalized and adjusted data.
 #'
 #' @importFrom dplyr left_join filter
 #' @importFrom Seurat NormalizeData VariableFeatures SCTransform
+#' @importFrom SummarizedExperiment assay assay<- assays
 #' @export
 non_batch_variation_removal <- function(input_read_RNA_assay, 
                                         empty_droplets_tbl = NULL, 
                                         alive_identification_tbl = NULL, 
+                                        doublet_identification_tbl = NULL,
                                         cell_cycle_score_tbl = NULL,
                                         assay = NULL,
                                         factors_to_regress = NULL,
-                                        external_path){
+                                        external_path,
+                                        container_type){
   #Fix GChecks 
   empty_droplet = NULL 
   .cell <- NULL 
@@ -1007,17 +1014,27 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
       dplyr::filter(!empty_droplet)
   } 
 
+  # remove dead cells
   if (!is.null(alive_identification_tbl)) {
-  input_read_RNA_assay =
-    input_read_RNA_assay |>
-    left_join(
-      alive_identification_tbl |>
-        select(.cell, any_of(factors_to_regress)),
-      by=".cell"
-    ) 
+    input_read_RNA_assay =
+      input_read_RNA_assay |>
+      left_join(
+        alive_identification_tbl ,
+        by=".cell"
+      ) |> dplyr::filter(alive) 
   }
   
-  if(!is.null(cell_cycle_score_tbl)) 
+  # remove doublets
+  if (!is.null(doublet_identification_tbl)) {
+    input_read_RNA_assay =
+      input_read_RNA_assay |>
+      left_join(
+        doublet_identification_tbl ,
+        by=".cell"
+      ) |> dplyr::filter(scDblFinder.class != "doublet") 
+  }
+  
+  if(!is.null(cell_cycle_score_tbl)) {
     input_read_RNA_assay = input_read_RNA_assay |>
     
     left_join(
@@ -1025,6 +1042,7 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
         select(.cell, any_of(factors_to_regress)),
       by=".cell"
     )
+  }
   
   # filter(!high_mitochondrion | !high_ribosome)
   
@@ -1036,7 +1054,7 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   # Normalise RNA
   input_read_RNA_assay <- 
     input_read_RNA_assay |> 
-      Seurat::SCTransform(
+      SCTransform(
       assay=assay,
       return.only.var.genes=FALSE,
       residual.features = NULL,
@@ -1045,23 +1063,40 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
       scale_factor=2186,  
       conserve.memory=T, 
       min_cells=0
-    )  |> 
-    GetAssayData(assay="SCT")
+    )  
+  # |> 
+  #   GetAssayData(assay="SCT")
+  
+  sct_mat <- input_read_RNA_assay |>  GetAssayData(assay="SCT")
 
   if (class_input == "SingleCellExperiment") {
 
-    if(input_read_RNA_assay[,1,drop=FALSE] |> is.nan() |> any())
+    if(sct_mat[,1,drop=FALSE] |> is.nan() |> any())
              warning("HPCell says: some features might be all 0s, NaN are added by Seurat in the SCT assay, and kept in the assay because SingleCellExperiment requires same feature set for all assays.")
              
-    write_HDF5_array_safe(input_read_RNA_assay, "SCT", external_path)
+    #write_HDF5_array_safe(input_read_RNA_assay, "SCT", external_path)
+    input_read_RNA_assay <- input_read_RNA_assay |> as.SingleCellExperiment(assay = "SCT" )
+    assays(input_read_RNA_assay) <- assays(input_read_RNA_assay)["logcounts"] # log-scaled counts in SCT
+    
+    input_read_RNA_assay |> save_experiment_data(dir = glue("{external_path}/{digest(input_read_RNA_assay)}"), 
+                                                 container_type = container_type)
+    
+    input_read_RNA_assay
     
   } else if (class_input ==  "Seurat") {
 
-    # Remove NaN features from SCT assay
-    input_read_RNA_assay <- input_read_RNA_assay[!apply(input_read_RNA_assay, 1, function(row) all(is.nan(row))), ]
-                                                      
-    input_read_RNA_assay 
+    #input_read_RNA_assay <- input_read_RNA_assay[!apply(input_read_RNA_assay, 1, function(row) all(is.nan(row))), ]
     
+    # Remove NaN features from SCT assay
+    keep_features <- rowSums(is.nan(sct_mat)) < ncol(sct_mat)
+    
+    # Subset Seurat object by features
+    input_read_RNA_assay <- subset(
+      input_read_RNA_assay,
+      features = rownames(sct_mat)[keep_features]
+    )
+    
+    input_read_RNA_assay
   }
   
   

@@ -8,10 +8,12 @@ non_batch_variation_removal(
   input_read_RNA_assay,
   empty_droplets_tbl = NULL,
   alive_identification_tbl = NULL,
+  doublet_identification_tbl = NULL,
   cell_cycle_score_tbl = NULL,
   assay = NULL,
   factors_to_regress = NULL,
-  external_path
+  external_path,
+  container_type
 )
 }
 \arguments{
@@ -21,9 +23,17 @@ non_batch_variation_removal(
 
 \item{alive_identification_tbl}{A tibble from alive cell identification.}
 
+\item{doublet_identification_tbl}{A tibble from doublet identification.}
+
 \item{cell_cycle_score_tbl}{A tibble from cell cycle scoring.}
 
 \item{assay}{assay used, default = "RNA"}
+
+\item{factors_to_regress}{A character vector specifying cell-level covariates to regress out during \code{SCTransform} normalization.}
+
+\item{external_path}{A character vector of directory that the data to be stored}
+
+\item{data_container_type}{A character vector specifying the output file type. Ideally it should match to the input file type.}
 }
 \value{
 Normalized and adjusted data.
