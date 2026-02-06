@@ -994,26 +994,13 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
-  if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
-    assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
-    
-    input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL, 
-                                                              counts = assay) 
-    # Rename assay
-    assay_name_old = input_read_RNA_assay |> Assays() |> _[[1]]
-    input_read_RNA_assay = input_read_RNA_assay |>
-      RenameAssays(
-        assay.name = assay_name_old,
-        new.assay.name = assay)
-  }
-  
   # avoid small number of cells 
   if (!is.null(empty_droplets_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |>
       left_join(empty_droplets_tbl, by = ".cell") |>
       dplyr::filter(!empty_droplet)
   } 
-
+  
   # remove dead cells
   if (!is.null(alive_identification_tbl)) {
     input_read_RNA_assay =
@@ -1036,14 +1023,30 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   
   if(!is.null(cell_cycle_score_tbl)) {
     input_read_RNA_assay = input_read_RNA_assay |>
-    
-    left_join(
-      cell_cycle_score_tbl |>
-        select(.cell, any_of(factors_to_regress)),
-      by=".cell"
-    )
+      
+      left_join(
+        cell_cycle_score_tbl |>
+          select(.cell, any_of(factors_to_regress)),
+        by=".cell"
+      )
   }
   
+  if (ncol(input_read_RNA_assay) == 0) return (NULL)
+  
+  if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
+    assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
+    
+    input_read_RNA_assay <- input_read_RNA_assay |> as.Seurat(data = NULL, 
+                                                              counts = assay) 
+    # Rename assay
+    assay_name_old = input_read_RNA_assay |> Assays() |> _[[1]]
+    input_read_RNA_assay = input_read_RNA_assay |>
+      RenameAssays(
+        assay.name = assay_name_old,
+        new.assay.name = assay)
+  }
+  
+ 
   # filter(!high_mitochondrion | !high_ribosome)
   
   # variable_features = readRDS(input_path_merged_variable_genes)
