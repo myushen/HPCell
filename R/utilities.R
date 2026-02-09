@@ -79,6 +79,7 @@ save_experiment_data <- function(data,
   switch(container_type,
          "anndata" = {
            if (ncol(assay(data)) == 1) data = data |> duplicate_single_column_assay()
+           data = data |> clean_and_report_NA_columns()
            zellkonverter::writeH5AD(data, paste0(dir, ".h5ad"), compression = "gzip") 
            read_data_container(paste0(dir, ".h5ad"), "anndata")
          },
@@ -93,6 +94,18 @@ save_experiment_data <- function(data,
                                                 paste0(dir, ".h5Seurat"),
                                                 overwrite = TRUE)
   )
+}
+
+#' Check whether a column is all NA in a dataframe, drop the column and warn users
+#' @return A data frame where all values are not NA
+#' @keywords internal
+#' @noRd
+clean_and_report_NA_columns <- function(df) {
+  na_column_names <- df |> select(where(~all(is.na(.)))) |> names()
+  
+  "Dropping {na_column_names} as they all contain only NA values" |>
+    cli_alert_info()
+  df |> select(-all_of(na_column_names))
 }
 
 #' Duplicate Single-Column Assay in a SingleCellExperiment or Seurat Object
@@ -3034,4 +3047,100 @@ computeCommunProbPathway <- function(object = NULL, net = NULL, pairLR.use = NUL
     object@netP$prob <- prob.pathways.sig
     return(object)
   }
+}
+
+#' Run SCTransform(v2) fallback hack after the "incorrect number of dimensions" crash
+#' @description
+#' This function is intended to be called *only after* \code{Seurat::SCTransform()}
+#' with \code{vst.flavor = "v2"} fails with the error
+#' \emph{"Error in model_pars[, 'theta'] : incorrect number of dimensions"}.
+#' @return A Seurat object returned by \code{Seurat::SCTransform()},
+#'   with provenance attributes describing the fallback.
+sct_v2_trycatch_fallback <- function(
+    obj,
+    assay = "X",
+    factors_to_regress = NULL,
+    scale_factor = 2186,
+    conserve.memory = TRUE,
+    min_cells = 0,
+    return.only.var.genes = FALSE,
+    residual.features = NULL,
+    verbose = TRUE,
+    
+    # fallback tuning
+    min_cells_for_survivor_detection = 5,
+    host_pick_top_detected = 2000,
+    jitter_range = c(0.99, 1.01),
+    ...
+) {
+  stopifnot(inherits(obj, "Seurat"))
+  
+  ## ------------------------------------------------------------
+  ## 1. Read the matrix SCTransform(v2) actually uses
+  ## ------------------------------------------------------------
+  umi <- tryCatch(
+    Seurat::GetAssayData(obj, assay = assay, layer = "counts"),
+    error = function(e) Seurat::GetAssayData(obj, assay = assay, slot = "counts")
+  )
+  
+  ## ------------------------------------------------------------
+  ## 2. Identify survivor gene (overdispersion proxy)
+  ## ------------------------------------------------------------
+  detected_cells <- Matrix::rowSums(umi > 0)
+  step1_genes <- detected_cells >= min_cells_for_survivor_detection
+  
+  umi_step1 <- umi[step1_genes, , drop = FALSE]
+  
+  gene_mean <- Matrix::rowMeans(umi_step1)
+  gene_var  <- Matrix::rowMeans(umi_step1^2) - gene_mean^2
+  overdispersion <- gene_var / pmax(gene_mean, 1e-12)
+  
+  survivor_gene <- names(which.max(overdispersion))
+  
+  if (!nzchar(survivor_gene) || !(survivor_gene %in% rownames(umi))) {
+    stop("sct_v2_trycatch_fallback(): failed to identify survivor gene")
+  }
+  
+  ## ------------------------------------------------------------
+  ## 3. Pick an existing host gene (same feature set)
+  ## ------------------------------------------------------------
+  top_detected <- names(sort(detected_cells, decreasing = TRUE))
+  host_candidates <- setdiff(top_detected, survivor_gene)
+  host_gene <- head(host_candidates, host_pick_top_detected)[1]
+  
+  ## ------------------------------------------------------------
+  ## 4. Overwrite host with survivor (+ tiny jitter on host only - avoid the complete same expression on two genes )
+  ## ------------------------------------------------------------
+  umi2 <- umi
+  umi2[host_gene, ] <- umi2[survivor_gene, ]
+  
+  set.seed(12345)
+  nz <- which(umi2[host_gene, ] > 0)
+  if (length(nz) > 0) {
+    umi2[host_gene, nz] <-
+      umi2[host_gene, nz] * runif(length(nz), jitter_range[1], jitter_range[2])
+  }
+  
+  ## ------------------------------------------------------------
+  ## 5. Write back counts WITHOUT changing features
+  ## ------------------------------------------------------------
+  obj2 <- obj
+  SeuratObject::LayerData(obj2, assay = assay, layer = "counts") <- umi2
+  
+  ## ------------------------------------------------------------
+  ## 6. Retry SCTransform(v2)
+  ## ------------------------------------------------------------
+  obj2 <- Seurat::SCTransform(
+    obj2,
+    assay,
+    return.only.var.genes = FALSE,
+    residual.features = NULL,
+    vars.to.regress = factors_to_regress,
+    vst.flavor = "v2",
+    scale_factor = 2186,
+    conserve.memory = TRUE,
+    min_cells = 0
+  )
+  
+  obj2
 }
