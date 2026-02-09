@@ -1033,6 +1033,12 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   
   if (ncol(input_read_RNA_assay) == 0) return (NULL)
   
+  # This because an error is num cell = 1
+  if(ncol(input_read_RNA_assay)==1){
+    input_read_RNA_assay = S4Vectors::cbind(input_read_RNA_assay, input_read_RNA_assay)
+    colnames(input_read_RNA_assay)[2]= "dummy___"
+  }
+  
   if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
     assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
     
@@ -1056,17 +1062,40 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   
   # Normalise RNA
   input_read_RNA_assay <- 
-    input_read_RNA_assay |> 
-      SCTransform(
-      assay=assay,
-      return.only.var.genes=FALSE,
-      residual.features = NULL,
-      vars.to.regress = factors_to_regress,
-      vst.flavor = "v2",
-      scale_factor=2186,  
-      conserve.memory=T, 
-      min_cells=0
-    )  
+    tryCatch(
+      {
+        input_read_RNA_assay |>
+          SCTransform(
+            assay = assay,
+            return.only.var.genes = FALSE,
+            residual.features = NULL,
+            vars.to.regress = factors_to_regress,
+            vst.flavor = "v2",
+            scale_factor = 2186,
+            conserve.memory = TRUE,
+            min_cells = 0
+          )
+      },
+      error = function(e) {
+        msg <- conditionMessage(e)
+        
+        if (grepl("incorrect number of dimensions", msg, fixed = TRUE)) {
+          input_read_RNA_assay |>
+            sct_v2_trycatch_fallback(
+              assay = assay,
+              factors_to_regress = factors_to_regress,
+              scale_factor = 2186,
+              conserve.memory = TRUE,
+              min_cells = 0,
+              return.only.var.genes = FALSE,
+              residual.features = NULL,
+              verbose = TRUE
+            )
+        } else {
+          stop(e)
+        }
+      }
+    )
   # |> 
   #   GetAssayData(assay="SCT")
   
