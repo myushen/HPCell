@@ -984,6 +984,9 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
                                         factors_to_regress = NULL,
                                         external_path,
                                         container_type){
+  
+  options(future.globals.maxSize = Inf) 
+  
   #Fix GChecks 
   empty_droplet = NULL 
   .cell <- NULL 
@@ -1033,11 +1036,9 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   
   if (ncol(input_read_RNA_assay) == 0) return (NULL)
   
-  # This because an error is num cell = 1
-  if(ncol(input_read_RNA_assay)==1){
-    input_read_RNA_assay = S4Vectors::cbind(input_read_RNA_assay, input_read_RNA_assay)
-    colnames(input_read_RNA_assay)[2]= "dummy___"
-  }
+  # SCTransform cant perform on one cell
+  if (ncol(input_read_RNA_assay) == 1) return (NULL)
+  if (ncol(input_read_RNA_assay[, !grepl("^DUMMY___", colnames(input_read_RNA_assay))]) == 1) return (NULL) 
   
   if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
     assay(input_read_RNA_assay, assay) <- assay(input_read_RNA_assay, assay) |> as("dgCMatrix")
@@ -1061,10 +1062,14 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   # VariableFeatures(input_read_RNA_assay) = variable_features
   
   # Normalise RNA
+  # Avoid sctransform explode in big samples
+  m <- GetAssayData(input_read_RNA_assay, assay, layer = "counts")
+  bigm_lgl <- as.double(nrow(m)) * as.double(ncol(m)) > .Machine$integer.max
+  min_cells <- if (bigm_lgl) 5L else 0L
+  new_min_cells = calculate_num_genes_express_in_cells(m, min_cells) # update min_cells if needed
+    
   input_read_RNA_assay <- 
-    tryCatch(
-      {
-        input_read_RNA_assay |>
+    input_read_RNA_assay |>
           SCTransform(
             assay = assay,
             return.only.var.genes = FALSE,
@@ -1073,29 +1078,8 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
             vst.flavor = "v2",
             scale_factor = 2186,
             conserve.memory = TRUE,
-            min_cells = 0
+            min_cells = new_min_cells
           )
-      },
-      error = function(e) {
-        msg <- conditionMessage(e)
-        
-        if (grepl("incorrect number of dimensions", msg, fixed = TRUE)) {
-          input_read_RNA_assay |>
-            sct_v2_trycatch_fallback(
-              assay = assay,
-              factors_to_regress = factors_to_regress,
-              scale_factor = 2186,
-              conserve.memory = TRUE,
-              min_cells = 0,
-              return.only.var.genes = FALSE,
-              residual.features = NULL,
-              verbose = TRUE
-            )
-        } else {
-          stop(e)
-        }
-      }
-    )
   # |> 
   #   GetAssayData(assay="SCT")
   
