@@ -104,7 +104,7 @@ clean_and_report_NA_columns <- function(df) {
   na_column_names <- df |> select(where(~all(is.na(.)))) |> names()
   
   "Dropping {na_column_names} as they all contain only NA values" |>
-    cli_alert_info()
+    cli::cli_alert_info()
   df |> select(-all_of(na_column_names))
 }
 
@@ -3049,98 +3049,57 @@ computeCommunProbPathway <- function(object = NULL, net = NULL, pairLR.use = NUL
   }
 }
 
-#' Run SCTransform(v2) fallback hack after the "incorrect number of dimensions" crash
-#' @description
-#' This function is intended to be called *only after* \code{Seurat::SCTransform()}
-#' with \code{vst.flavor = "v2"} fails with the error
-#' \emph{"Error in model_pars[, 'theta'] : incorrect number of dimensions"}.
-#' @return A Seurat object returned by \code{Seurat::SCTransform()},
-#'   with provenance attributes describing the fallback.
-sct_v2_trycatch_fallback <- function(
-    obj,
-    assay = "X",
-    factors_to_regress = NULL,
-    scale_factor = 2186,
-    conserve.memory = TRUE,
-    min_cells = 0,
-    return.only.var.genes = FALSE,
-    residual.features = NULL,
-    verbose = TRUE,
-    
-    # fallback tuning
-    min_cells_for_survivor_detection = 5,
-    host_pick_top_detected = 2000,
-    jitter_range = c(0.99, 1.01),
-    ...
-) {
-  stopifnot(inherits(obj, "Seurat"))
+#' Calculate a safe minimum-cells threshold for expressed genes
+#'
+#' Computes the minimum number of cells (`min_cells`) in which a gene must be
+#' detected (i.e., have expression > 0) so that the number of genes passing the
+#' threshold does not exceed the maximum safe size implied by
+#' `.Machine$integer.max` (to avoid 32-bit integer overflow in downstream steps).
+#' @param m A gene-by-cell matrix of counts or expression values. Typically a
+#'   sparse matrix of class \code{\link[Matrix]{dgCMatrix}}.
+#' @param min_cells Integer scalar. Desired starting minimum number of cells in
+#'   which a gene must be detected. 
+#' @param step Integer scalar. Step size used when rounding the computed
+#'   threshold up to a multiple of \code{step}. Defaults to \code{5L}.
+#'
+#' @return An integer scalar giving the (possibly increased) \code{min_cells}
+#'   threshold that keeps the number of retained genes within the allowed limit.
+#'
+#' @details
+#' The allowed number of genes is computed as:
+#' \deqn{ \mathrm{allowed\_genes} = \left\lfloor \frac{.Machine\$\mathrm{integer.max}}{\mathrm{ncol}(m)} \right\rfloor }
+#'
+#' A gene is considered "detected" in a cell if \code{m > 0}.
+#'
+#' @importFrom Matrix rowSums
+#' @export
+calculate_num_genes_express_in_cells <- function(m, min_cells,
+                                                 step = 5L) {
   
-  ## ------------------------------------------------------------
-  ## 1. Read the matrix SCTransform(v2) actually uses
-  ## ------------------------------------------------------------
-  umi <- tryCatch(
-    Seurat::GetAssayData(obj, assay = assay, layer = "counts"),
-    error = function(e) Seurat::GetAssayData(obj, assay = assay, slot = "counts")
-  )
+  # Count detected genes once (important for big data)
+  detected_genes <- Matrix::rowSums(m > 0)
   
-  ## ------------------------------------------------------------
-  ## 2. Identify survivor gene (overdispersion proxy)
-  ## ------------------------------------------------------------
-  detected_cells <- Matrix::rowSums(umi > 0)
-  step1_genes <- detected_cells >= min_cells_for_survivor_detection
+  # Max genes allowed to avoid integer overflow
+  allowed_genes <- floor(.Machine$integer.max / ncol(m))
   
-  umi_step1 <- umi[step1_genes, , drop = FALSE]
+  # If already safe, return original threshold
+  n_genes <- sum(detected_genes >= min_cells)
+  if (n_genes <= allowed_genes)
+    return(min_cells)
   
-  gene_mean <- Matrix::rowMeans(umi_step1)
-  gene_var  <- Matrix::rowMeans(umi_step1^2) - gene_mean^2
-  overdispersion <- gene_var / pmax(gene_mean, 1e-12)
+  # ---- Fast threshold selection (no loop) ----
+  dg_sorted <- sort(detected_genes, decreasing = TRUE)
   
-  survivor_gene <- names(which.max(overdispersion))
+  # Edge case: even all genes allowed
+  if (allowed_genes >= length(dg_sorted))
+    return(min_cells)
   
-  if (!nzchar(survivor_gene) || !(survivor_gene %in% rownames(umi))) {
-    stop("sct_v2_trycatch_fallback(): failed to identify survivor gene")
-  }
+  # Minimal detection cutoff that keeps genes under limit
+  new_threshold <- dg_sorted[allowed_genes]
   
-  ## ------------------------------------------------------------
-  ## 3. Pick an existing host gene (same feature set)
-  ## ------------------------------------------------------------
-  top_detected <- names(sort(detected_cells, decreasing = TRUE))
-  host_candidates <- setdiff(top_detected, survivor_gene)
-  host_gene <- head(host_candidates, host_pick_top_detected)[1]
+  # Round up to nearest step (e.g., +5L)
+  new_threshold <- as.integer(ceiling(new_threshold / step) * step)
   
-  ## ------------------------------------------------------------
-  ## 4. Overwrite host with survivor (+ tiny jitter on host only - avoid the complete same expression on two genes )
-  ## ------------------------------------------------------------
-  umi2 <- umi
-  umi2[host_gene, ] <- umi2[survivor_gene, ]
-  
-  set.seed(12345)
-  nz <- which(umi2[host_gene, ] > 0)
-  if (length(nz) > 0) {
-    umi2[host_gene, nz] <-
-      umi2[host_gene, nz] * runif(length(nz), jitter_range[1], jitter_range[2])
-  }
-  
-  ## ------------------------------------------------------------
-  ## 5. Write back counts WITHOUT changing features
-  ## ------------------------------------------------------------
-  obj2 <- obj
-  SeuratObject::LayerData(obj2, assay = assay, layer = "counts") <- umi2
-  
-  ## ------------------------------------------------------------
-  ## 6. Retry SCTransform(v2)
-  ## ------------------------------------------------------------
-  obj2 <- Seurat::SCTransform(
-    obj2,
-    assay,
-    return.only.var.genes = FALSE,
-    residual.features = NULL,
-    vars.to.regress = factors_to_regress,
-    vst.flavor = "v2",
-    scale_factor = 2186,
-    conserve.memory = TRUE,
-    min_cells = 0
-  )
-  
-  obj2
+  return(new_threshold)
 }
+
