@@ -32,8 +32,8 @@ imputed_ethnicity_df <- zellkonverter::readH5AD("/vast/projects/cellxgene_curate
   select(sample_id, imputed_ethnicity = ethnicity_predictions) |> 
   mutate(imputed_ethnicity = as.character(imputed_ethnicity))
 
-lowConf_ethnicity_df |> arrow::write_parquet("/vast/projects/cellxgene_curated/cellNexus/lowConf_ethnicity_df.parquet")
-imputed_ethnicity_df |> arrow::write_parquet("/vast/projects/cellxgene_curated/cellNexus/imputed_ethnicity_df.parquet")
+# lowConf_ethnicity_df |> arrow::write_parquet("/vast/projects/cellxgene_curated/cellNexus/lowConf_ethnicity_df.parquet")
+# imputed_ethnicity_df |> arrow::write_parquet("/vast/projects/cellxgene_curated/cellNexus/imputed_ethnicity_df.parquet")
 
 job::job({
   
@@ -54,7 +54,7 @@ job::job({
   # Single DuckDB connection: do the heavy transforms in SQL (avoid read/write/read on 50M+ rows)
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   
-  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_0_13_filtered_missing_cells_mengyuan.parquet"
+  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_0_filtered_missing_cells_mengyuan.parquet"
   
   DBI::dbExecute(con, glue::glue("
   CREATE VIEW cell_metadata_raw AS
