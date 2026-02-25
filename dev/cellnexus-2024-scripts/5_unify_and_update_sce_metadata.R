@@ -154,7 +154,7 @@ job::job({
   
   # Update atlas hierarchy to include a date suffix (as per previous COPY logic)
   if ("atlas_id" %in% raw_cols) {
-    select_exprs <- c(select_exprs, glue::glue("({sql_id('atlas_id')} || '/21-08-2025') AS {sql_id('atlas_id')}"))
+    select_exprs <- c(select_exprs, glue::glue("({sql_id('atlas_id')} || '/01-07-2024') AS {sql_id('atlas_id')}"))
   } else {
     select_exprs <- c(select_exprs, glue::glue("NULL::VARCHAR AS {sql_id('atlas_id')}"))
   }
