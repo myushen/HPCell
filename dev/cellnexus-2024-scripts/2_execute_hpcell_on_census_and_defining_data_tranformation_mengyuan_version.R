@@ -116,8 +116,8 @@ job::job({
           crashes_error = 10,
           options_cluster = crew.cluster::crew_options_slurm(
            #memory_gigabytes_required = c(20, 35, 50, 75, 100, 150), 
-           #memory_gigabytes_required = c(90, 100, 120, 150, 200,240), 
-           memory_gigabytes_required = c(60, 80, 100, 150, 200), 
+           memory_gigabytes_required = c(150, 170, 180, 200, 220,240), 
+           #memory_gigabytes_required = c(60, 80, 100, 150, 200), 
            # memory_gigabytes_required = c(45, 60, 75, 100, 120, 150), 
             cpus_per_task = c(2, 2, 5, 10, 20), 
             time_minutes = c(60*24, 60*24, 60*24, 60*24, 60*24,60*24),
@@ -153,6 +153,11 @@ job::job({
     # Doublets identification
     remove_doublets_scDblFinder(target_input = "sce_transformed") |>
     
+    # SCT 
+    normalise_abundance_seurat_SCT(target_input = "sce_transformed", factors_to_regress = c(
+      "subsets_Mito_percent",
+      "subsets_Ribo_percent")) |> 
+    
     # Pseudobulk
     calculate_pseudobulk(target_input = "sce_transformed",
                          group_by = "cell_type_unified_ensemble") |>
@@ -160,9 +165,9 @@ job::job({
     # metacell
     cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
 
-    # Cell Chat
-    ligand_receptor_cellchat(target_input = "sce_transformed",
-                             group_by = "cell_type_unified_ensemble") |>
+    # # Cell Chat
+    # ligand_receptor_cellchat(target_input = "sce_transformed",
+    #                          group_by = "cell_type_unified_ensemble") |>
     
     print()
   
