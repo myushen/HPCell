@@ -127,6 +127,13 @@ job::job({
   
   con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   
+  dir.create("/vast/scratch/users/shen.m/duckdb_tmp", showWarnings = FALSE)
+  
+  DBI::dbExecute(
+    con,
+    "SET temp_directory='/vast/scratch/users/shen.m/duckdb_tmp';"
+  )
+  
   # Create a view for cell_annotation in DuckDB
   dbExecute(con, "
   CREATE VIEW cell_metadata AS
@@ -146,7 +153,7 @@ job::job({
   dbExecute(con, "
   CREATE VIEW empty_droplet_df AS
   SELECT *
-  FROM read_parquet('/vast/scratch/users/shen.m/cellNexus_run/cell_annotation_2024_Jul_updated.parquet')
+  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet')
 ")
   
   dbExecute(con, "
@@ -185,7 +192,7 @@ job::job({
         
       WHERE cell_metadata.dataset_id NOT IN ('99950e99-2758-41d2-b2c9-643edcdf6d82', '9fcb0b73-c734-40a5-be9c-ace7eea401c9') -- (THESE TWO DATASETS DOESNT contain meaningful data - no observation_joinid etc), thus was excluded in the final metadata.
          
-  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_0_mengyuan.parquet'
+  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_1_mengyuan.parquet'
   (FORMAT PARQUET, COMPRESSION 'gzip');
 "
   
@@ -209,7 +216,7 @@ job::job({
   dbExecute(con, "
   CREATE VIEW cell_metadata AS
   SELECT *
-  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_0_mengyuan.parquet')
+  FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_1_mengyuan.parquet')
 ")
   
   dbExecute(con, "
@@ -228,7 +235,7 @@ job::job({
         ON cell_metadata.cell_id = cell_map.cell_id
         AND cell_metadata.dataset_id = cell_map.dataset_id
 
-  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_0_mengyuan.parquet'
+  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_1_mengyuan.parquet'
   (FORMAT PARQUET, COMPRESSION 'gzip');
 "
   
@@ -250,12 +257,12 @@ job::job({
 cell_metadata = 
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_0_mengyuan.parquet')")
+    sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_1_mengyuan.parquet')")
   )
 
 library(targets)
 library(tidyverse)
-store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_0_13_single_cell"
+store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_single_cell"
 
 tar_script({
   library(dplyr)
@@ -330,7 +337,7 @@ tar_script({
           crashes_error = 5, 
           seconds_idle = 30,
           options_cluster = crew_options_slurm(
-            memory_gigabytes_required = c(30, 60, 120, 240), 
+            memory_gigabytes_required = c(60, 90, 120, 240), 
             cpus_per_task = c(2), 
             time_minutes = c(60*24),
             verbose = T
@@ -338,7 +345,7 @@ tar_script({
         ),
         crew_controller_slurm(
           name = "tier_5",
-          script_lines = "#SBATCH --mem 400G",
+          script_lines = "#SBATCH --mem 150G",
           slurm_cpus_per_task = 1,
           workers = 2,
           tasks_max = 10,
@@ -814,47 +821,37 @@ tar_script({
     # Begin processing the data pipeline with the initial dataset 'target_name_grouped_by_dataset_id'
     sct_df = file_id_db |> 
       nest(cells = c(cell_id, new_cell_id)) %>% 
-      {
-        df  <- .
-        idx <- which(!is.na(df$sct_target_name))
-        
-        # default: every row gets NULL
-        sct_out <- vector("list", nrow(df))
-        
-        # parallel read ONLY non-NA targets (and be robust to failures)
-        sct_data <- bplapply(
-          df$sct_target_name[idx],
-          FUN = function(tn) {
-            tryCatch(
-              tar_read_raw(tn, store = my_store),
-              error = function(e) NULL
-            )
-          },
-          BPPARAM = bp
-        )
-        
-        # rowwise post-processing (filter to that row's cells)
-        sct_out[idx] <- map2(
-          sct_data,
-          df$cells[idx],
-          ~ {
-            if (is.null(.x)) return(NULL)
+      # Step 1: Read raw data for each 'target_name' and store it in a new column 'sce'
+      mutate(
+        sct = bplapply(
+          sct_target_name,
+          FUN = function(x) {
+            if (is.na(x)) {
+              return(NULL) # because cant get sample_id and dataset_id from NULL sct_matrix
+            }
             
-            cell_map <- setNames(.y$new_cell_id, .y$cell_id)
-            
-            .x |>
-              filter(.cell %in% names(cell_map)) %>%
-              {
-                colnames(.) <- cell_map[colnames(.)]
-                .
-              } |>
-              mutate(sample_id = stringr::str_replace(sample_id, "\\.h5ad$", ""))
-          }
-        )
+          tar_read_raw(x, store = my_store) |>
+            select(.cell, observation_joinid = observation_joinid.x,
+                   donor_id, dataset_id, sample_id, cell_type)
+          },  # Read the raw SingleCellExperiment object
+          BPPARAM = bp  # Use the defined parallel backend
+        )) |> 
+      # This should not be needed, but there are some data sets with zero cells 
+      filter(!map_lgl(sct, is.null)) |> 
+      mutate(sct = map2(sct, cells, ~ {
         
-        df$sct <- sct_out
-        df
-      }
+        cell_map <- setNames(.y$new_cell_id, .y$cell_id) 
+        
+        .x |> filter(.cell %in% names(cell_map)) %>% 
+          {
+            colnames(.) <- cell_map[colnames(.)]
+            .
+          } |>
+          
+          # TEMPORARY FIX. NEED TO INVESTIGATE WHY THE SUFFIX HAPPENS
+          mutate(sample_id = stringr::str_replace(sample_id, ".h5ad$",""))
+        
+      }, .progress = TRUE))
 
     if(nrow(sct_df) == 0) {
       warning("this chunk has no rows for somereason.")
@@ -970,20 +967,20 @@ tar_script({
   list(
     
     # The input DO NOT DELETE
-    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul", deployment = "main"),
+    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store", deployment = "main"),
     tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024", deployment = "main"),
     # This is the store for retrieving missing cells between cellnexus metadata and sce. A different store as it was done separately
     #tar_target(cache_directory, "/vast/scratch/users/shen.m/debug2/cellxgene/19-12-2024", deployment = "main"),
     tar_target(
       cell_metadata,
-      "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_0_13_mengyuan.parquet", 
+      "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_0_mengyuan.parquet", 
       packages = c( "arrow","dplyr","duckdb")
       
     ),
     
     tar_target(
       cell_id_dict,
-      "/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_Jul_2024.parquet", 
+      "/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_0_Jul_2024.parquet", 
       packages = c( "arrow","dplyr","duckdb")
       
     ),
@@ -1070,7 +1067,7 @@ tar_script({
     
     tar_target(
       dataset_id_sct,
-      insistent_cbind_sct_by_dataset_id(target_name_grouped_by_dataset_id, cell_metadata, cell_id_dict, my_store = my_store),
+      cbind_sct_by_dataset_id(target_name_grouped_by_dataset_id, cell_metadata, cell_id_dict, my_store = my_store),
       pattern = map(target_name_grouped_by_dataset_id),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb",  "BiocParallel", "parallelly"),
       resources = tar_resources(
@@ -1150,5 +1147,5 @@ missing_cells <- missing_cells_tbl |> pull(cell_id)
 cell_metadata |> filter(!cell_id %in% missing_cells) |> 
   
   # This method of save parquet to parquet is faster 
-  cellNexus:::duckdb_write_parquet(path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_0_filtered_missing_cells_mengyuan.parquet")
+  cellNexus:::duckdb_write_parquet(path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_1_filtered_missing_cells_mengyuan.parquet")
 
