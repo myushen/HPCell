@@ -182,7 +182,21 @@ cbind_sce_by_dataset_id = function(target_name_grouped_by_dataset_id,
   
   # Parallelise
   cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
-  bp <- MulticoreParam(workers = cores , progressbar = TRUE)  # Adjust the number of workers as needed
+  bp <- MulticoreParam(workers = cores, progressbar = TRUE)
+  
+  bplapply_with_fallback <- function(X, FUN, BPPARAM) {
+    tryCatch(
+      bplapply(X, FUN = FUN, BPPARAM = BPPARAM),
+      error = function(e) {
+        if (grepl("wrong args for environment subassignment", conditionMessage(e))) {
+          message("bplapply failed with reducer error, falling back to lapply")
+          lapply(X, FUN = FUN)
+        } else {
+          stop(e)
+        }
+      }
+    )
+  }
   
   # Begin processing the data pipeline with the initial dataset 'target_name_grouped_by_dataset_id'
   sce_df = 
@@ -191,17 +205,10 @@ cbind_sce_by_dataset_id = function(target_name_grouped_by_dataset_id,
     nest(cells = cell_id) |> 
     # Step 1: Read raw data for each 'target_name' and store it in a new column 'sce'
     mutate(
-      sce = bplapply(
+      sce = bplapply_with_fallback(
         target_name,
-        FUN = function(x) tar_read_raw(x, store = my_store) ,
-        # |># Read the raw SingleCellExperiment object
-        #   # Mengyuan : Temp fix (THIS SHOULD BE DONE IN PSEUDOBULK HPCELL)
-        #   mutate(cell_type_unified_ensemble = ifelse(is.na(cell_type_unified_ensemble),
-        #                                              "unknown",
-        #                                              cell_type_unified_ensemble))
-        #   },
-          
-        BPPARAM = bp  # Use the defined parallel backend
+        FUN = function(x) tar_read_raw(x, store = my_store),
+        BPPARAM = bp
       )
     ) |>
     

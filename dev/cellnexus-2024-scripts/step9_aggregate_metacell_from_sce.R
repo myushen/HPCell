@@ -89,6 +89,14 @@
 
 # aggregate metacell from metadata and save assays
 store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_metacell/"
+cell_metadata_path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet"
+# Dynamically get metacell column names from cell_metadata; fallback if file not available (e.g. local dev)
+# metacell_columns <- "metacell_65536"
+# tbl(
+#     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
+#     sql(glue::glue("SELECT * FROM read_parquet('{cell_metadata_path}')"))
+#   ) |> select(contains("metacell_")) |> colnames()
+
 tar_script({
   library(dplyr)
   library(magrittr)
@@ -135,35 +143,35 @@ tar_script({
             verbose = T
           )
         ),
-    crew_controller_slurm(
-      name = "tier_4",
-      workers = 200,
-      tasks_max = 10,
-      crashes_error = 5, 
-      seconds_idle = 30,
-      options_cluster = crew_options_slurm(
-        memory_gigabytes_required = c(120, 150, 200, 250, 300), 
-        cpus_per_task = c(2, 2, 5, 5, 5, 10), 
-        time_minutes = c(60*24,60*24,60*24,60*24,60*24),
-        verbose = T
-      )
-    ))),
+        crew_controller_slurm(
+          name = "tier_4",
+          workers = 200,
+          tasks_max = 10,
+          crashes_error = 5, 
+          seconds_idle = 30,
+          options_cluster = crew_options_slurm(
+            #memory_gigabytes_required = c(120, 150, 200, 250, 300), 
+            memory_gigabytes_required = c(40, 70, 90, 150, 300), 
+            cpus_per_task = c(2, 2, 5, 5, 5, 10), 
+            time_minutes = c(60*24,60*24,60*24,60*24,60*24),
+            verbose = T
+          )
+        ))),
     trust_object_timestamps = TRUE)
-    
-  get_ids <- function(cell_metadata,
-                      metacell_column) {
-    metacell_column <- ensym(metacell_column)
+  
+  get_ids <- function(cell_metadata, metacell_column) {
+    metacell_column <- as.character(metacell_column)
     tbl(dbConnect(duckdb::duckdb(), dbdir = ":memory:"), 
         sql(glue("SELECT * FROM read_parquet('{cell_metadata}')"))) |> 
-      filter(!is.na(!!metacell_column)) |>
+      filter(!is.na(.data[[metacell_column]])) |>
       distinct(file_id_cellNexus_single_cell) |> pull()
   }
   
   get_sce <- function(cell_metadata, id, metacell_column, cache) {
-    metacell_column <- ensym(metacell_column)
+    metacell_column <- as.character(metacell_column)
     tbl(dbConnect(duckdb::duckdb(), 
                   dbdir = ":memory:"), sql(glue("SELECT * FROM read_parquet('{cell_metadata}')"))) |> 
-      filter(!is.na(!!metacell_column)) |>
+      filter(!is.na(.data[[metacell_column]])) |>
       filter(file_id_cellNexus_single_cell == id) |> get_single_cell_experiment(cache_directory = cache)
   }
   
@@ -186,421 +194,61 @@ tar_script({
     return(TRUE)
   }
   
-  list(
-    tar_target(
-      cell_metadata,
-      "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.0.13.parquet",
-      deployment = "main",
-      packages = c("arrow", "dplyr", "duckdb")
+  c(
+    list(
+      tar_target(
+        cell_metadata,
+        "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet",
+        deployment = "main",
+        packages = c("arrow", "dplyr", "duckdb")
+      ),
+      tar_target(
+        local_cache,
+        "/vast/scratch/users/shen.m/cellNexus",
+        deployment = "main"
+      ),
+      tar_target(
+        save_cache_directory,
+        "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024",
+        deployment = "main"
+      )
     ),
-    tar_target(
-      local_cache,
-      "/vast/scratch/users/shen.m/cellNexus",
-      deployment = "main"
-    ),
-    tar_target(
-      save_cache_directory,
-      "/vast/scratch/users/shen.m/cellNexus/cellxgene/21-08-2025",
-      deployment = "main"
-    ),
-    # metacell 2
-    tar_target(
-      file_ids,
-      get_ids(cell_metadata, "metacell_2")
-    ),
-    tar_target(
-      file_id_sce,
-      get_sce(cell_metadata, file_ids, "metacell_2", local_cache),
-      pattern = map(file_ids),
-      resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    ),
-    tar_target(
-      metacell,
-      aggregate_metacell(file_id_sce, "metacell_2"),
-      pattern = map(file_id_sce),
-      #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-    tar_target(
-      save_metacell,
-      save_anndata(metacell, paste0(save_cache_directory, "/metacell_2", "/counts")),
-      pattern = map(metacell),
-      #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-    
-    # metacell 4
-    tar_target(
-      file_ids_4,
-      get_ids(cell_metadata, "metacell_4")
-    ),
-    tar_target(
-      file_id_sce_4,
-      get_sce(cell_metadata, file_ids_4, "metacell_4", local_cache),
-      pattern = map(file_ids_4),
-      resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    ),
-    tar_target(
-      metacell_4,
-      aggregate_metacell(file_id_sce_4, "metacell_4"),
-      pattern = map(file_id_sce_4),
-      #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-    tar_target(
-      save_metacell_4,
-      save_anndata(metacell_4, paste0(save_cache_directory, "/metacell_4", "/counts")),
-      pattern = map(metacell_4),
-     # resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-    # metacell_8
-    tar_target(
-      file_ids_8,
-      get_ids(cell_metadata, "metacell_8")
-    ),
-    tar_target(
-      file_id_sce_8,
-      get_sce(cell_metadata, file_ids_8, "metacell_8", local_cache),
-      pattern = map(file_ids_8),
-      resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    ),
-    tar_target(
-      metacell_8,
-      aggregate_metacell(file_id_sce_8, "metacell_8"),
-      pattern = map(file_id_sce_8),
-      #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-    tar_target(
-      save_metacell_8,
-      save_anndata(metacell_8, paste0(save_cache_directory, "/metacell_8", "/counts")),
-      pattern = map(metacell_8),
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-      #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    ),
-    # metacell_16
-    tar_target(
-      file_ids_16,
-      get_ids(cell_metadata, "metacell_16")
-    ),
-    tar_target(
-      file_id_sce_16,
-      get_sce(cell_metadata, file_ids_16, "metacell_16", local_cache),
-      pattern = map(file_ids_16),
-      resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    ),
-    tar_target(
-      metacell_16,
-      aggregate_metacell(file_id_sce_16, "metacell_16"),
-      pattern = map(file_id_sce_16),
-      #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-    tar_target(
-      save_metacell_16,
-      save_anndata(metacell_16, paste0(save_cache_directory, "/metacell_16", "/counts")),
-      pattern = map(metacell_16),
-      #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-    
-    # metacell_32
-    tar_target(
-      file_ids_32,
-      get_ids(cell_metadata, "metacell_32")
-    ),
-    tar_target(
-      file_id_sce_32,
-      get_sce(cell_metadata, file_ids_32, "metacell_32", local_cache),
-      pattern = map(file_ids_32),
-      resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    ),
-    tar_target(
-      metacell_32,
-      aggregate_metacell(file_id_sce_32, "metacell_32"),
-      pattern = map(file_id_sce_32),
-      resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    ),
-    tar_target(
-      save_metacell_32,
-      save_anndata(metacell_32, paste0(save_cache_directory, "/metacell_32", "/counts")),
-      pattern = map(metacell_32),
-#      resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-      resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    ),
-  
-  # metacell_64
-  tar_target(
-    file_ids_64,
-    get_ids(cell_metadata, "metacell_64")
-  ),
-  tar_target(
-    file_id_sce_64,
-    get_sce(cell_metadata, file_ids_64, "metacell_64", local_cache),
-    pattern = map(file_ids_64),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_64,
-    aggregate_metacell(file_id_sce_64, "metacell_64"),
-    pattern = map(file_id_sce_64),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_64,
-    save_anndata(metacell_64, paste0(save_cache_directory, "/metacell_64", "/counts")),
-    pattern = map(metacell_64),
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  
-  # metacell_128
-  tar_target(
-    file_ids_128,
-    get_ids(cell_metadata, "metacell_128")
-  ),
-  tar_target(
-    file_id_sce_128,
-    get_sce(cell_metadata, file_ids_128, "metacell_128", local_cache),
-    pattern = map(file_ids_128),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_128,
-    aggregate_metacell(file_id_sce_128, "metacell_128"),
-    pattern = map(file_id_sce_128),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_128,
-    save_anndata(metacell_128, paste0(save_cache_directory, "/metacell_128", "/counts")),
-    pattern = map(metacell_128),
-    #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-  ),
-  
-  # metacell_256
-  tar_target(
-    file_ids_256,
-    get_ids(cell_metadata, "metacell_256")
-  ),
-  tar_target(
-    file_id_sce_256,
-    get_sce(cell_metadata, file_ids_256, "metacell_256", local_cache),
-    pattern = map(file_ids_256),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_256,
-    aggregate_metacell(file_id_sce_256, "metacell_256"),
-    pattern = map(file_id_sce_256),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_256,
-    save_anndata(metacell_256, paste0(save_cache_directory, "/metacell_256", "/counts")),
-    pattern = map(metacell_256),
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  
-  # metacell_512
-  tar_target(
-    file_ids_512,
-    get_ids(cell_metadata, "metacell_512")
-  ),
-  tar_target(
-    file_id_sce_512,
-    get_sce(cell_metadata, file_ids_512, "metacell_512", local_cache),
-    pattern = map(file_ids_512),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_512,
-    aggregate_metacell(file_id_sce_512, "metacell_512"),
-    pattern = map(file_id_sce_512),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_512,
-    save_anndata(metacell_512, paste0(save_cache_directory, "/metacell_512", "/counts")),
-    pattern = map(metacell_512),
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-   # resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  
-  # metacell_1024
-  tar_target(
-    file_ids_1024,
-    get_ids(cell_metadata, "metacell_1024")
-  ),
-  tar_target(
-    file_id_sce_1024,
-    get_sce(cell_metadata, file_ids_1024, "metacell_1024", local_cache),
-    pattern = map(file_ids_1024),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_1024,
-    aggregate_metacell(file_id_sce_1024, "metacell_1024"),
-    pattern = map(file_id_sce_1024),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_1024,
-    save_anndata(metacell_1024, paste0(save_cache_directory, "/metacell_1024", "/counts")),
-    pattern = map(metacell_1024),
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-   # resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  
-  # metacell_2048
-  tar_target(
-    file_ids_2048,
-    get_ids(cell_metadata, "metacell_2048")
-  ),
-  tar_target(
-    file_id_sce_2048,
-    get_sce(cell_metadata, file_ids_2048, "metacell_2048", local_cache),
-    pattern = map(file_ids_2048),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_2048,
-    aggregate_metacell(file_id_sce_2048, "metacell_2048"),
-    pattern = map(file_id_sce_2048),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_2048,
-    save_anndata(metacell_2048, paste0(save_cache_directory, "/metacell_2048", "/counts")),
-    pattern = map(metacell_2048),
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  
-  # metacell_4096
-  tar_target(
-    file_ids_4096,
-    get_ids(cell_metadata, "metacell_4096")
-  ),
-  tar_target(
-    file_id_sce_4096,
-    get_sce(cell_metadata, file_ids_4096, "metacell_4096", local_cache),
-    pattern = map(file_ids_4096),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_4096,
-    aggregate_metacell(file_id_sce_4096, "metacell_4096"),
-    pattern = map(file_id_sce_4096),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_4096,
-    save_anndata(metacell_4096, paste0(save_cache_directory, "/metacell_4096", "/counts")),
-    pattern = map(metacell_4096),
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-    #resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  
-  # metacell_8192
-  tar_target(
-    file_ids_8192,
-    get_ids(cell_metadata, "metacell_8192")
-  ),
-  tar_target(
-    file_id_sce_8192,
-    get_sce(cell_metadata, file_ids_8192, "metacell_8192", local_cache),
-    pattern = map(file_ids_8192),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    metacell_8192,
-    aggregate_metacell(file_id_sce_8192, "metacell_8192"),
-    pattern = map(file_id_sce_8192),
-    resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-  ),
-  tar_target(
-    save_metacell_8192,
-    save_anndata(metacell_8192, paste0(save_cache_directory, "/metacell_8192", "/counts")),
-    pattern = map(metacell_8192),
-    resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-  ),
-
-# metacell_16384
-tar_target(
-  file_ids_16384,
-  get_ids(cell_metadata, "metacell_16384")
-),
-tar_target(
-  file_id_sce_16384,
-  get_sce(cell_metadata, file_ids_16384, "metacell_16384", local_cache),
-  pattern = map(file_ids_16384),
-  resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-),
-tar_target(
-  metacell_16384,
-  aggregate_metacell(file_id_sce_16384, "metacell_16384"),
-  pattern = map(file_id_sce_16384),
-  resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-),
-tar_target(
-  save_metacell_16384,
-  save_anndata(metacell_16384, paste0(save_cache_directory, "/metacell_16384", "/counts")),
-  pattern = map(metacell_16384),
-  resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-),
-
-# metacell_32768
-tar_target(
-  file_ids_32768,
-  get_ids(cell_metadata, "metacell_32768")
-),
-tar_target(
-  file_id_sce_32768,
-  get_sce(cell_metadata, file_ids_32768, "metacell_32768", local_cache),
-  pattern = map(file_ids_32768),
-  resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-),
-tar_target(
-  metacell_32768,
-  aggregate_metacell(file_id_sce_32768, "metacell_32768"),
-  pattern = map(file_id_sce_32768),
-  resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-),
-tar_target(
-  save_metacell_32768,
-  save_anndata(metacell_32768, paste0(save_cache_directory, "/metacell_32768", "/counts")),
-  pattern = map(metacell_32768),
-  resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-),
-
-# metacell_65536
-tar_target(
-  file_ids_65536,
-  get_ids(cell_metadata, "metacell_65536")
-),
-tar_target(
-  file_id_sce_65536,
-  get_sce(cell_metadata, file_ids_65536, "metacell_65536", local_cache),
-  pattern = map(file_ids_65536),
-  resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-),
-tar_target(
-  metacell_65536,
-  aggregate_metacell(file_id_sce_65536, "metacell_65536"),
-  pattern = map(file_id_sce_65536),
-  resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
-),
-tar_target(
-  save_metacell_65536,
-  save_anndata(metacell_65536, paste0(save_cache_directory, "/metacell_65536", "/counts")),
-  pattern = map(metacell_65536),
-  resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
-)
-)
+    tarchetypes::tar_map(
+      values = tibble(
+        metacell_column = tbl(
+          dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
+          sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet')")
+        ) |> select(contains("metacell_")) |> colnames()
+      ),
+      names = metacell_column,
+      unlist = TRUE,
+      tar_target(
+        file_ids,
+        get_ids(cell_metadata, metacell_column)
+        # |>
+        #   # TEST PURPOSE ONLY
+        #   head(2)
+      ),
+      tar_target(
+        file_id_sce,
+        get_sce(cell_metadata, file_ids, metacell_column, local_cache),
+        pattern = map(file_ids),
+        resources = tar_resources(crew = tar_resources_crew(controller = "elastic"))
+      ),
+      tar_target(
+        metacell,
+        aggregate_metacell(file_id_sce, metacell_column),
+        pattern = map(file_id_sce),
+        resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
+      ),
+      tar_target(
+        save_metacell,
+        save_anndata(metacell, paste0(save_cache_directory, "/", metacell_column, "/counts")),
+        pattern = map(metacell),
+        resources = tar_resources(crew = tar_resources_crew(controller = "tier_4"))
+      )
+    )
+  )
   
 }, script = paste0(store_file_cellNexus, "_target_script.R"), ask = FALSE)
 
@@ -615,10 +263,10 @@ job::job({
 #tar_invalidate(names = everything(), store = store_file_cellNexus)
 tar_meta(store = store_file_cellNexus) |> filter(!is.na(error)) |> distinct(name, error)
 tar_errored(store = store_file_cellNexus)
-tar_workspace("metacell_4_118ff943e6b9f3dd", store = store_file_cellNexus, script =  paste0(store_file_cellNexus, "_target_script.R"))
-debugonce(aggregate_metacell)
-aggregate_metacell(file_id_sce_4, "metacell_4")
-save_metacell_4_1e172832adc8d4c6
+# With tar_map, target names are suffixed by metacell_column, e.g. file_ids_metacell_4, metacell_metacell_4
+# tar_workspace("metacell_metacell_4_<hash>", store = store_file_cellNexus, script = paste0(store_file_cellNexus, "_target_script.R"))
+# debugonce(aggregate_metacell)
+# aggregate_metacell(file_id_sce, "metacell_4")  # when debugging a specific branch
 
 # Check the number of file id should be created for metacell_2
 cache_dir = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/"
@@ -627,7 +275,7 @@ file_count <- function(metacell_vec){
   get_metadata(
     cache_directory = cache_dir,
     cloud_metadata = NULL,
-    local_metadata = file.path(cache_dir, "metadata.1.0.13.parquet")
+    local_metadata = file.path(cache_dir, "metadata.1.4.0.parquet")
   ) |> 
     filter(!is.na(metacell_column),
            empty_droplet == FALSE,
@@ -643,7 +291,7 @@ file_count('metacell_2')
 lung_metacell_256 = get_metadata(
   cache_directory = cache_dir,
   cloud_metadata = NULL,
-  local_metadata = file.path(cache_dir, "metadata.1.0.13.parquet")
+  local_metadata = file.path(cache_dir, "metadata.1.4.0.parquet")
 ) |> 
   filter(!is.na(metacell_256),
          empty_droplet == FALSE,
@@ -656,7 +304,7 @@ lung_metacell_256 = get_metadata(
 get_metadata(
   cache_directory = cache_dir,
   cloud_metadata = NULL,
-  local_metadata = file.path(cache_dir, "metadata.1.0.13.parquet")
+  local_metadata = file.path(cache_dir, "metadata.1.4.0.parquet")
 ) |> 
   filter(!is.na(metacell_256),
          empty_droplet == FALSE,
