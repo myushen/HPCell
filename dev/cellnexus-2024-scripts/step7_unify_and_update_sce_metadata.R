@@ -54,7 +54,7 @@ job::job({
   # Single DuckDB connection: do the heavy transforms in SQL (avoid read/write/read on 50M+ rows)
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   
-  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet"
+  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet"  # MODIFY HERE: Metadata input parquet path
   
   DBI::dbExecute(con, glue::glue("
   CREATE VIEW cell_metadata_raw AS
@@ -159,7 +159,7 @@ job::job({
   
   # Update atlas hierarchy to include a date suffix (as per previous COPY logic)
   if ("atlas_id" %in% raw_cols) {
-    select_exprs <- c(select_exprs, glue::glue("({sql_id('atlas_id')} || '/01-07-2024') AS {sql_id('atlas_id')}"))
+    select_exprs <- c(select_exprs, glue::glue("({sql_id('atlas_id')} || '/01-07-2024') AS {sql_id('atlas_id')}")) # MODIFY HERE: date suffix for atlas_id
   } else {
     select_exprs <- c(select_exprs, glue::glue("NULL::VARCHAR AS {sql_id('atlas_id')}"))
   }
@@ -232,6 +232,7 @@ job::job({
 ")
   
   # Perform left join and save to parquet
+  # MODIFY HERE: output metadata parquet path
   copy_query <- "
   COPY (
     SELECT
@@ -273,7 +274,7 @@ job::job({
 })
 
 x = tbl(dbConnect(duckdb::duckdb(), dbdir = ":memory:"),  
-        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet')") )
+        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet')") ) # MODIFY HERE: input metadata parquet path
 
 # Split cell_metadata to cellnexus_metadata, original census_metadata, and metacell_metadata (host Rshiny on smaller file)
 # ---- Split: read metadata.1.4.0.parquet once, write smaller derivative Parquets ----
@@ -283,7 +284,7 @@ job::job({
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
-  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet"
+  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet" # MODIFY HERE: input metadata parquet path
   out_dir <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan"
   
   DBI::dbExecute(
@@ -317,6 +318,7 @@ job::job({
   keep_cellnexus <- setdiff(cols, drop_cellnexus)
   select_cellnexus <- paste(sql_id(keep_cellnexus), collapse = ", ")
   
+  # MODIFY HERE: output cellnexus metadata parquet path
   DBI::dbExecute(
     con,
     glue::glue(
@@ -341,6 +343,7 @@ job::job({
   )
   select_census <- paste(sql_id(census_cols), collapse = ", ")
   
+  # MODIFY HERE: output census metadata parquet path
   DBI::dbExecute(
     con,
     glue::glue(
@@ -360,6 +363,7 @@ job::job({
   metacell_cols <- intersect(metacell_cols, cols)
   select_metacell <- paste(sql_id(metacell_cols), collapse = ", ")
   
+  # MODIFY HERE: output metacell metadata parquet path
   DBI::dbExecute(
     con,
     glue::glue(

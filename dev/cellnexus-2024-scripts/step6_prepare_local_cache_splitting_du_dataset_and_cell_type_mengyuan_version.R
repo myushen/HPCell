@@ -119,22 +119,23 @@ job::job({
   # FOR MENGYUAN CELL_METADATA COULD BE BIGGER THAN CELL_ANNOTATION
   
   get_file_ids(
-    "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet"
+    "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet" # MODIFY HERE: input cell annotation parquet
   )  |> 
-    write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cellNexus_single_cell_2024_Jul.parquet")
+    write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cellNexus_single_cell_2024_Jul.parquet") # MODIFY HERE: output file_id parquet
   
   gc()
   
   con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   
-  dir.create("/vast/scratch/users/shen.m/duckdb_tmp", showWarnings = FALSE)
+  dir.create("/vast/scratch/users/shen.m/duckdb_tmp", showWarnings = FALSE) # MODIFY HERE: duckdb temp directory
   
   DBI::dbExecute(
     con,
-    "SET temp_directory='/vast/scratch/users/shen.m/duckdb_tmp';"
+    "SET temp_directory='/vast/scratch/users/shen.m/duckdb_tmp';" # MODIFY HERE: duckdb temp directory (must match dir.create above)
   )
   
   # Create a view for cell_annotation in DuckDB
+  # MODIFY HERE: cell_metadata parquet path inside the SQL string below
   dbExecute(con, "
   CREATE VIEW cell_metadata AS
   SELECT 
@@ -150,12 +151,14 @@ job::job({
   #   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/annotation_tbl_light.parquet')
   # ")
   
+  # MODIFY HERE: cell_annotation parquet path inside the SQL string below
   dbExecute(con, "
   CREATE VIEW empty_droplet_df AS
   SELECT *
   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet')
 ")
   
+  # MODIFY HERE: file_id parquet path inside the SQL string below (should match the write_parquet output above)
   dbExecute(con, "
   CREATE VIEW file_id_cellNexus_single_cell AS
   SELECT dataset_id, sample_chunk, cell_chunk, sample_pseudobulk_chunk, cell_type_unified_ensemble, sample_id, file_id_cellNexus_single_cell, file_id_cellNexus_pseudobulk
@@ -192,7 +195,7 @@ job::job({
         
       WHERE cell_metadata.dataset_id NOT IN ('99950e99-2758-41d2-b2c9-643edcdf6d82', '9fcb0b73-c734-40a5-be9c-ace7eea401c9') -- (THESE TWO DATASETS DOESNT contain meaningful data - no observation_joinid etc), thus was excluded in the final metadata.
          
-  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_2_mengyuan.parquet'
+  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_2_mengyuan.parquet' -- MODIFY HERE: output merged metadata parquet (v1_2_2)
   (FORMAT PARQUET, COMPRESSION 'gzip');
 "
   
@@ -213,12 +216,14 @@ job::job({
   con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   
   # Create a view for cell_annotation in DuckDB
+  # MODIFY HERE: v1_2_2 merged metadata parquet path inside the SQL string below (should match the COPY TO output above)
   dbExecute(con, "
   CREATE VIEW cell_metadata AS
   SELECT *
   FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_2_mengyuan.parquet')
 ")
   
+  # MODIFY HERE: cell_id dictionary parquet path inside the SQL string below
   dbExecute(con, "
   CREATE VIEW cell_map AS
   SELECT *
@@ -235,7 +240,7 @@ job::job({
         ON cell_metadata.cell_id = cell_map.cell_id
         AND cell_metadata.dataset_id = cell_map.dataset_id
 
-  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_mengyuan.parquet'
+  ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_mengyuan.parquet' -- MODIFY HERE: output final metadata parquet with new cell IDs (v1_3_2)
   (FORMAT PARQUET, COMPRESSION 'gzip');
 "
   
@@ -254,6 +259,7 @@ job::job({
 
 
 
+# MODIFY HERE: final metadata parquet path used for the targets pipeline (should match the COPY TO output above)
 cell_metadata = 
   tbl(
     dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
@@ -262,7 +268,7 @@ cell_metadata =
 
 library(targets)
 library(tidyverse)
-store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_single_cell"
+store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_single_cell" # MODIFY HERE: targets store directory for this pipeline
 
 tar_script({
   library(dplyr)
@@ -980,20 +986,20 @@ tar_script({
   list(
     
     # The input DO NOT DELETE
-    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store", deployment = "main"),
-    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024", deployment = "main"),
+    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store", deployment = "main"), # MODIFY HERE: HPCell targets store to read SCEs from
+    tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024", deployment = "main"), # MODIFY HERE: output cache directory for saved anndata files
     # This is the store for retrieving missing cells between cellnexus metadata and sce. A different store as it was done separately
     #tar_target(cache_directory, "/vast/scratch/users/shen.m/debug2/cellxgene/19-12-2024", deployment = "main"),
     tar_target(
       cell_metadata,
-      "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_mengyuan.parquet", 
+      "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_mengyuan.parquet", # MODIFY HERE: final metadata parquet (should match the COPY TO output above)
       packages = c( "arrow","dplyr","duckdb")
       
     ),
     
     tar_target(
       cell_id_dict,
-      "/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_2_Jul_2024.parquet", 
+      "/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_2_Jul_2024.parquet", # MODIFY HERE: cell_id dictionary parquet
       packages = c( "arrow","dplyr","duckdb")
       
     ),
@@ -1160,5 +1166,5 @@ missing_cells <- missing_cells_tbl |> pull(cell_id)
 cell_metadata |> filter(!cell_id %in% missing_cells) |> 
   
   # This method of save parquet to parquet is faster 
-  cellNexus:::duckdb_write_parquet(path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet")
+  cellNexus:::duckdb_write_parquet(path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet") # MODIFY HERE: output parquet after filtering missing cells
 

@@ -88,8 +88,8 @@
 
 
 # aggregate metacell from metadata and save assays
-store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_metacell/"
-cell_metadata_path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet"
+store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_metacell/" # MODIFY HERE: targets store directory for this pipeline
+cell_metadata_path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet" # MODIFY HERE: cell metadata parquet (used to dynamically derive metacell column names)
 # Dynamically get metacell column names from cell_metadata; fallback if file not available (e.g. local dev)
 # metacell_columns <- "metacell_65536"
 # tbl(
@@ -200,18 +200,18 @@ tar_script({
     list(
       tar_target(
         cell_metadata,
-        "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet",
+        "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet", # MODIFY HERE: cell metadata parquet (must match cell_metadata_path above)
         deployment = "main",
         packages = c("arrow", "dplyr", "duckdb")
       ),
       tar_target(
         local_cache,
-        "/vast/scratch/users/shen.m/cellNexus",
+        "/vast/scratch/users/shen.m/cellNexus", # MODIFY HERE: local cache directory containing the single-cell h5ad files (input to get_single_cell_experiment)
         deployment = "main"
       ),
       tar_target(
         save_cache_directory,
-        "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024",
+        "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024", # MODIFY HERE: output directory where aggregated metacell anndata files are saved
         deployment = "main"
       )
     ),
@@ -219,7 +219,7 @@ tar_script({
       values = tibble(
         metacell_column = tbl(
           dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-          sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet')")
+          sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet')") # MODIFY HERE: cell metadata parquet path inside SQL (must match cell_metadata_path above)
         ) |> select(contains("metacell_")) |> colnames()
       ),
       names = metacell_column,
@@ -271,7 +271,7 @@ tar_errored(store = store_file_cellNexus)
 # aggregate_metacell(file_id_sce, "metacell_4")  # when debugging a specific branch
 
 # Check the number of file id should be created for metacell_2
-cache_dir = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/"
+cache_dir = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/" # MODIFY HERE: directory used for verification queries below (contains metadata.1.4.0.parquet)
 file_count <- function(metacell_vec){
   metacell_column <- ensym(metacell_vec)
   get_metadata(
