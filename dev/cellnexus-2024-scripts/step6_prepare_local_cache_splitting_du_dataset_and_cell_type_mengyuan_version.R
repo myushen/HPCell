@@ -858,19 +858,32 @@ tar_script({
       return(NULL)
     }
     
-    sct_df |> 
+    sct_df |>
       mutate(
         sct = map(sct, \(x) {
           if (is.null(x)) return(NULL)
           SingleCellExperiment(assays = assays(x), colData = colData(x))
         })
       ) |>
-      # Step 5: Combine all 'sce' objects within each group into a single 'sce' object
       group_by(file_id_cellNexus_single_cell) |>
       summarise(
         sct = {
-          scts <- compact(sct)                # drop NULLs inside each group
-          list(if (length(scts) == 0) NULL else do.call(SummarizedExperiment::cbind, scts))
+          scts <- compact(sct)  # drop NULLs inside each group
+          
+          list(
+            if (length(scts) == 0) {
+              NULL
+            } else {
+              
+              # A few big samples do not return all features because it reached R limit 2^31-1 in SCTransform
+              common_genes <- cellNexus:::check_gene_overlap(scts)
+              
+              # subset to intersection genes (and keep same order across objects)
+              scts2 <- map(scts, \(z) z[common_genes, , drop = FALSE])
+              
+              do.call(SummarizedExperiment::cbind, scts2)
+            }
+          )
         },
         cells = list(do.call(rbind, cells)),
         .groups = "drop"

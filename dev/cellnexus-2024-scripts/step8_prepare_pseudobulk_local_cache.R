@@ -21,11 +21,10 @@
 #   
 # }
 
-# Need to run step 3 before step 4
 library(targets)
 library(tidyverse)
 library(cellNexus)
-store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_0_13_pseudobulk"
+store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_pseudobulk"
 my_store = "/vast/scratch/users/shen.m/cellNexus_target_store"
 
 tar_script({

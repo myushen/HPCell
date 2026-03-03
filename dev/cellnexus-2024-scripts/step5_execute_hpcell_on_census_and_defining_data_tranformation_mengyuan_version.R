@@ -77,6 +77,44 @@ sliced_sample_tbl =
   filter(!dataset_id %in% c("99950e99-2758-41d2-b2c9-643edcdf6d82", "9fcb0b73-c734-40a5-be9c-ace7eea401c9" )) |> 
   dplyr::select(file_name, tier, cell_number, dataset_id, sample_2, method_to_apply, assay, count_upper_bound, feature_thresh)
 
+# Manually updated 300 samples transformation profiles
+sample_summary_df = tar_read(sample_summary_df, store = "/vast/scratch/users/shen.m/sct_failed_samples_raw_counts_summary_target_store/_targets/") |> 
+  bind_rows() |>
+  mutate(max_gt_20 = ifelse(max_val > 20, TRUE, FALSE)) |> 
+  mutate(sample_id = str_remove(sample_id, ".h5ad"))
+
+impute_x_approximate_distribution <- function(df) {
+  df |> mutate(
+    inferred_distribution = case_when(
+      
+      # 1) No negatives, no large values, no integers, no floating
+      !has_negative & !max_gt_20 & !all_integer & !has_floating ~ "log1p",
+      
+      # 2) No negatives, has large values
+      !has_negative &  max_gt_20 & !all_integer & !has_floating  ~ "raw",
+      
+      # 3) No negatives, large values, all integer, has floating
+      !has_negative &  max_gt_20 & all_integer & !has_floating ~ "raw",
+      
+      # 4) Has negatives, no large values, no integer, no floating
+      has_negative & !max_gt_20 & !all_integer & !has_floating ~ "raw",
+      
+      # 5) Has negatives and large values
+      has_negative &  max_gt_20 & !all_integer & !has_floating ~ "raw"
+    )
+  )
+} 
+
+sample_summary_df = sample_summary_df |> impute_x_approximate_distribution() |> 
+  # Inverse distribution
+  mutate(method_to_apply = case_when(inferred_distribution == "log" ~ "exp",
+                                     inferred_distribution == "log1p" ~ "expm1",
+                                     inferred_distribution == "raw" ~ "identity"))
+
+sliced_sample_tbl = sliced_sample_tbl |> left_join(sample_summary_df |> mutate(sample_id = str_remove(sample_id, ".h5ad")) |>
+                                                     select(sample_id, method_to_apply), by = c("sample_2" =  "sample_id")) |>
+  mutate(method_to_apply = case_when(is.na(method_to_apply.y) ~ method_to_apply.x,
+                                     !is.na(method_to_apply.y) ~ method_to_apply.y))
 
 sliced_sample_tbl <- saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.rds")
 
@@ -95,7 +133,7 @@ feature_thresh = sliced_sample_tbl |> pull(feature_thresh)
 # functions <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/functions.rds")
 # feature_thresh <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/feature_thresh.rds")
 
-my_store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul"
+my_store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store"
 job::job({
   
   library(HPCell)
@@ -116,11 +154,11 @@ job::job({
           crashes_error = 10,
           options_cluster = crew.cluster::crew_options_slurm(
            #memory_gigabytes_required = c(20, 35, 50, 75, 100, 150), 
-           memory_gigabytes_required = c(150, 170, 180, 200, 220,240), 
-           #memory_gigabytes_required = c(60, 80, 100, 150, 200), 
+           memory_gigabytes_required = c(90, 120, 150, 180, 200), 
+           #memory_gigabytes_required = c(70, 80, 100, 150, 200), 
            # memory_gigabytes_required = c(45, 60, 75, 100, 120, 150), 
             cpus_per_task = c(2, 2, 5, 10, 20), 
-            time_minutes = c(60*24, 60*24, 60*24, 60*24, 60*24,60*24),
+            time_minutes = c(60*24, 60*24, 60*24, 60*24, 60*24),
             verbose = T
           )
         )
@@ -302,7 +340,7 @@ tar_script({
   list(
     
     # The input DO NOT DELETE
-    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul", deployment = "main"),
+    tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store", deployment = "main"),
     
     tar_target(
       target_name,
@@ -343,30 +381,30 @@ library(arrow)
 library(dplyr)
 library(duckdb)
 library(targets)
-library(cellNexus)
+# library(cellNexus)
 
-cellNexus:::duckdb_write_parquet = function(data_tbl, output_parquet, compression = "gzip") {
-  
-  # Establish connection to DuckDB in-memory database
-  con_write <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-  
-  # Register `data_tbl` within the DuckDB connection (this doesn't load it into memory)
-  duckdb::duckdb_register(con_write, "data_tbl_view", data_tbl)
-  
-  # Use DuckDB's COPY command to write `data_tbl` directly to Parquet with compression
-  copy_query <- paste0("
-  COPY data_tbl_view TO '", output_parquet, "' (FORMAT PARQUET, COMPRESSION '", compression, "');
-  ")
-  
-  # Execute the COPY command
-  dbExecute(con_write, copy_query)
-  
-  # Unregister the temporary view
-  duckdb::duckdb_unregister(con_write, "data_tbl_view")
-  
-  # Disconnect from the database
-  dbDisconnect(con_write, shutdown = TRUE)
-}
+# cellNexus:::duckdb_write_parquet = function(data_tbl, output_parquet, compression = "gzip") {
+#   
+#   # Establish connection to DuckDB in-memory database
+#   con_write <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+#   
+#   # Register `data_tbl` within the DuckDB connection (this doesn't load it into memory)
+#   duckdb::duckdb_register(con_write, "data_tbl_view", data_tbl)
+#   
+#   # Use DuckDB's COPY command to write `data_tbl` directly to Parquet with compression
+#   copy_query <- paste0("
+#   COPY data_tbl_view TO '", output_parquet, "' (FORMAT PARQUET, COMPRESSION '", compression, "');
+#   ")
+#   
+#   # Execute the COPY command
+#   dbExecute(con_write, copy_query)
+#   
+#   # Unregister the temporary view
+#   duckdb::duckdb_unregister(con_write, "data_tbl_view")
+#   
+#   # Disconnect from the database
+#   dbDisconnect(con_write, shutdown = TRUE)
+# }
 
 
 # Write annotation light
@@ -392,25 +430,25 @@ cell_annotation = cell_annotation |> mutate(
   monaco_first_labels_fine = ifelse(is.na(monaco_first_labels_fine), "Other", monaco_first_labels_fine),
   azimuth_predicted_celltype_l2=ifelse(is.na(azimuth_predicted_celltype_l2), "Other", azimuth_predicted_celltype_l2))
 
-cell_annotation |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/annotation_tbl_light.parquet", compression = "zstd")
+#cell_annotation |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/annotation_tbl_light.parquet", compression = "zstd")
 
 empty_droplet = 
-  tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>
+  tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 alive_cells = 
-  tar_read(alive_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>
+  tar_read(alive_tbl, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 doublet_cells =
-  tar_read(doublet_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>
+  tar_read(doublet_tbl, store ="/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store") |>
   bind_rows() |>
   dplyr::rename(cell_ = .cell)
 
 metacell = 
-  tar_read(metacell_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |> 
+  tar_read(metacell_tbl, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store") |> 
   bind_rows() |> 
   dplyr::rename(cell_ = cell) |> 
   dplyr::rename_with(
@@ -419,7 +457,7 @@ metacell =
   )
 
 # Save cell type concensus tbl from HPCell output to disk
-cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |>  
+cell_type_concensus_tbl = tar_read(cell_type_concensus_tbl, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store") |>  
   bind_rows() |> 
   dplyr::rename(cell_ = .cell)
 
@@ -456,33 +494,33 @@ cell_metadata_joined2 |>
                        compression = "zstd")
 
 # Cellchat output
-ligand_receptor_tbl = tar_read(ligand_receptor_tbl, store = "/vast/scratch/users/shen.m/cellNexus_target_store_2024_Jul") |> bind_rows()
+ligand_receptor_tbl = tar_read(ligand_receptor_tbl, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store") |> bind_rows()
 # save
 con <- dbConnect(duckdb::duckdb(), dbdir = "~/cellxgene_curated/metadata_cellxgene_mengyuan/cellNexus_lr_signaling_pathway_strength.duckdb")
 duckdb::dbWriteTable(con, "lr_pathway_table", ligand_receptor_tbl, overwrite = TRUE)
 dbDisconnect(con)
 
 
-
-write_parquet_to_parquet = function(data_tbl, output_parquet, compression = "gzip") {
-  
-  # Establish connection to DuckDB in-memory database
-  con_write <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-  
-  # Register `data_tbl` within the DuckDB connection (this doesn't load it into memory)
-  duckdb::duckdb_register(con_write, "data_tbl_view", data_tbl)
-  
-  # Use DuckDB's COPY command to write `data_tbl` directly to Parquet with compression
-  copy_query <- paste0("
-  COPY data_tbl_view TO '", output_parquet, "' (FORMAT PARQUET, COMPRESSION '", compression, "');
-  ")
-  
-  # Execute the COPY command
-  dbExecute(con_write, copy_query)
-  
-  # Unregister the temporary view
-  duckdb::duckdb_unregister(con_write, "data_tbl_view")
-  
-  # Disconnect from the database
-  dbDisconnect(con_write, shutdown = TRUE)
-}
+# 
+# write_parquet_to_parquet = function(data_tbl, output_parquet, compression = "gzip") {
+#   
+#   # Establish connection to DuckDB in-memory database
+#   con_write <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+#   
+#   # Register `data_tbl` within the DuckDB connection (this doesn't load it into memory)
+#   duckdb::duckdb_register(con_write, "data_tbl_view", data_tbl)
+#   
+#   # Use DuckDB's COPY command to write `data_tbl` directly to Parquet with compression
+#   copy_query <- paste0("
+#   COPY data_tbl_view TO '", output_parquet, "' (FORMAT PARQUET, COMPRESSION '", compression, "');
+#   ")
+#   
+#   # Execute the COPY command
+#   dbExecute(con_write, copy_query)
+#   
+#   # Unregister the temporary view
+#   duckdb::duckdb_unregister(con_write, "data_tbl_view")
+#   
+#   # Disconnect from the database
+#   dbDisconnect(con_write, shutdown = TRUE)
+# }

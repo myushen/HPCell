@@ -54,7 +54,7 @@ job::job({
   # Single DuckDB connection: do the heavy transforms in SQL (avoid read/write/read on 50M+ rows)
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   
-  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_0_filtered_missing_cells_mengyuan.parquet"
+  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet"
   
   DBI::dbExecute(con, glue::glue("
   CREATE VIEW cell_metadata_raw AS
@@ -93,7 +93,10 @@ job::job({
     "cell_type_ontology_term_id_1",
     "azimuth",
     "blueprint",
-    "monaco"
+    "monaco",
+    "alive_1",
+    "cell_id_1",
+    "dataset_id_4"
   )
   
   pattern_drop <- c(
@@ -130,7 +133,9 @@ job::job({
       "atlas_id",
       "blueprint_first_labels_fine",
       "monaco_first_labels_fine",
-      "azimuth_predicted_celltype_l2"
+      "azimuth_predicted_celltype_l2",
+      "cell_id",
+      "new_cell_id"
     )
   )
   
@@ -178,6 +183,14 @@ job::job({
       glue::glue("NULL::VARCHAR AS {sql_id('cell_annotation_azimuth_l2')}")
     }
   )
+  
+  # new_cell_id -> cell_id as first column (drop original cell_id entirely)
+  cell_id_expr <- if ("new_cell_id" %in% raw_cols) {
+    glue::glue("{sql_id('new_cell_id')} AS {sql_id('cell_id')}")
+  } else {
+    glue::glue("NULL::VARCHAR AS {sql_id('cell_id')}")
+  }
+  select_exprs <- c(cell_id_expr, select_exprs)
   
   select_sql <- paste(select_exprs, collapse = ",\n    ")
   
