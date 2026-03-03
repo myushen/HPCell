@@ -25,7 +25,7 @@ library(targets)
 library(tidyverse)
 library(cellNexus)
 store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_pseudobulk"
-my_store = "/vast/scratch/users/shen.m/cellNexus_target_store"
+my_store =  "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store"
 
 tar_script({
   library(dplyr)
@@ -274,6 +274,11 @@ save_anndata = function(dataset_id_sce, cache_directory){
   
   .x |> assays() |> names() = "counts"
   
+  # Drop list-type columns in colData 
+  cd <- colData(.x)
+  is_list_col <- vapply(cd, is.list, logical(1))
+  colData(.x) <- cd[, !is_list_col, drop = FALSE]
+  
   # Check if there is a memory issue 
   assays(.x) <- assays(.x) |> map(DelayedArray::realize)
 
@@ -290,12 +295,11 @@ insistent_save_anndata <- purrr::insistently(save_anndata, rate = purrr::rate_de
 list(
   
   # The input DO NOT DELETE
-  tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus_target_store", deployment = "main"),
-  tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/21-08-2025/pseudobulk", deployment = "main"),
+  tar_target(my_store, "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store", deployment = "main"),
+  tar_target(cache_directory, "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024/pseudobulk", deployment = "main"),
   tar_target(
     cell_metadata,
-    #"/vast/scratch/users/shen.m/cellNexus_run/cell_metadata_cell_type_consensus_v1_0_12_mengyuan.parquet", 
-    "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_0_13_mengyuan.parquet", 
+    "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_1_mengyuan.parquet",
     packages = c( "arrow","dplyr","duckdb")
     
   ),

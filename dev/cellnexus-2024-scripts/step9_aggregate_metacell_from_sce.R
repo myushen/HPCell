@@ -88,7 +88,7 @@
 
 
 # aggregate metacell from metadata and save assays
-store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_0_13_metacell/"
+store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_metacell/"
 tar_script({
   library(dplyr)
   library(magrittr)
