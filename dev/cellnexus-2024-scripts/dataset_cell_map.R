@@ -21,21 +21,21 @@ tar_script({
     workspace_on_error = TRUE,
     controller = crew_controller_group(
       list(
-        # crew_controller_slurm(
-        #   name = "elastic",
-        #   workers = 300,
-        #   tasks_max = 20,
-        #   seconds_idle = 30,
-        #   crashes_error = 10,
-        #   options_cluster = crew_options_slurm(
-        #     #memory_gigabytes_required = c(10, 20, 40, 80, 160), 
-        #     memory_gigabytes_required = c(25, 35, 40, 80, 160), 
-        #     cpus_per_task = c(2, 2, 5, 10, 20), 
-        #     time_minutes = c(30, 30, 30, 60*4, 60*24),
-        #     verbose = T
-        #   )
-        # )
-        crew_controller_local(workers = 8)
+        crew_controller_slurm(
+          name = "elastic",
+          workers = 300,
+          tasks_max = 20,
+          seconds_idle = 30,
+          crashes_error = 10,
+          options_cluster = crew_options_slurm(
+            #memory_gigabytes_required = c(10, 20, 40, 80, 160),
+            memory_gigabytes_required = c(25, 35, 40, 80, 160),
+            cpus_per_task = c(2, 2, 5, 10, 20),
+            time_minutes = c(30, 30, 30, 60*4, 60*24),
+            verbose = T
+          )
+        )
+        #crew_controller_local(workers = 8)
       )
     ), 
     trust_object_timestamps = TRUE
@@ -61,7 +61,7 @@ tar_script({
   }
   
   list(
-    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_0_mengyuan.parquet",
+    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_2_mengyuan.parquet",
                deployment = "main"),
     tar_target(
       unique_dataset,
@@ -98,7 +98,7 @@ job::job({
 })
 
 cell_id_dict = tar_read(cell_id_dict, store = store)
-cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_0_Jul_2024.parquet",
+cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_2_Jul_2024.parquet",
                                      compression = "zstd")
 
 

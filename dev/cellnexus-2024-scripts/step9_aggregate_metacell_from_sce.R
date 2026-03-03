@@ -172,7 +172,9 @@ tar_script({
     tbl(dbConnect(duckdb::duckdb(), 
                   dbdir = ":memory:"), sql(glue("SELECT * FROM read_parquet('{cell_metadata}')"))) |> 
       filter(!is.na(.data[[metacell_column]])) |>
-      filter(file_id_cellNexus_single_cell == id) |> get_single_cell_experiment(cache_directory = cache)
+      filter(file_id_cellNexus_single_cell == id) |> get_single_cell_experiment(cache_directory = cache, 
+                                                                                repository = NULL # this assume SCE are not uploaded to cloud
+                                                                                )
   }
   
   aggregate_metacell <- function(sce, metacell) {
