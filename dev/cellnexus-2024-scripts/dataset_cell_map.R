@@ -41,22 +41,22 @@ tar_script({
     trust_object_timestamps = TRUE
   )
   
-  get_unique_dataset <- function(cell_metadata){
+  get_unique_file_ids <- function(cell_metadata){
     tbl(dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
         sql(glue::glue("SELECT * FROM read_parquet('{cell_metadata}')"))) |> 
-      distinct(dataset_id) |> pull()
+      distinct(file_id_cellNexus_single_cell) |> pull()
   }
   
-  create_dataset_cell_id_dict <- function(cell_metadata, datasetId) {
+  create_file_id_cell_id_dict <- function(cell_metadata, file_id) {
     
     
     tbl(dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
         sql(glue::glue("SELECT * FROM read_parquet('{cell_metadata}')"))) |> 
-      filter(dataset_id == datasetId) |>
+      filter(file_id_cellNexus_single_cell == file_id) |>
       dbplyr::window_order(cell_id) |> 
-      mutate(cell_index = row_number(),
-             new_cell_id = paste(dataset_id, cell_index, sep = "___")) |> 
-      select(cell_id, dataset_id, new_cell_id) |>
+      mutate(cell_index = row_number()) |> 
+      select(cell_id, file_id_cellNexus_single_cell, 
+             new_cell_id = cell_index) |>
       collect()
   }
   
@@ -64,8 +64,11 @@ tar_script({
     tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_2_mengyuan.parquet",
                deployment = "main"),
     tar_target(
-      unique_dataset,
-      get_unique_dataset(cell_metadata) 
+      unique_file_ids,
+      # TESTING PURPOSE ONLY
+      # c("3cef5b6aa0f5772485bb710f71e69456___1.h5ad",
+      #   "cd2caa6de850f73af4ca78a2ea307dd4___1.h5ad")
+      get_unique_file_ids(cell_metadata) 
       # |> head(2)
       ,
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
@@ -74,9 +77,9 @@ tar_script({
       # )
     ),
     tar_target(
-      cell_id_dict,
-      create_dataset_cell_id_dict(cell_metadata, unique_dataset),
-      pattern = map(unique_dataset),
+      file_id_cell_id_dict,
+      create_file_id_cell_id_dict(cell_metadata, unique_file_ids),
+      pattern = map(unique_file_ids),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
       # resources = tar_resources(
       #   crew = tar_resources_crew(controller = "elastic")
@@ -97,8 +100,9 @@ job::job({
   
 })
 
-cell_id_dict = tar_read(cell_id_dict, store = store)
-cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_2_Jul_2024.parquet",
+file_id_cell_id_dict = tar_read(file_id_cell_id_dict, store = store)
+file_id_cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_0_0_Jul_2024.parquet",
                                      compression = "zstd")
-
+rm(file_id_cell_id_dict)
+gc()
 

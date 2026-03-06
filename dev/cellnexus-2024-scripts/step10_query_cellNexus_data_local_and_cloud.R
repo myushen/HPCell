@@ -6,24 +6,36 @@ library(stringr)
 cache = "~/scratch/cache_temp"
 
 x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet")
-sce = x |>
+x = x |>
   dplyr::filter(
     self_reported_ethnicity == "African" &
       assay |> stringr::str_like("%10x%") & 
       tissue == "lung parenchyma" &
       cell_type |> stringr::str_like("%CD4%")
-  ) |> 
+  ) |> filter(empty_droplet == FALSE, alive == TRUE, scDblFinder.class!="doublet")
+
+# Test SCE
+sce = x |> 
   get_single_cell_experiment(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL)
 
-sct = x |>
-  dplyr::filter(
-    self_reported_ethnicity == "African" &
-      assay |> stringr::str_like("%10x%") & 
-      tissue == "lung parenchyma" &
-      cell_type |> stringr::str_like("%CD4%")
-  ) |> 
-  dplyr::filter(empty_droplet==FALSE, alive==TRUE, scDblFinder.class!="doublet") |>
-  get_single_cell_experiment(assays = "sct", cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL)
+# TEST CPM
+cpm = x |> 
+  get_single_cell_experiment(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL, assays = "cpm")
+
+# TEST RANK
+rank = x |> 
+  get_single_cell_experiment(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL, assays = "rank")
+
+# TEST SCT
+sct = x |> get_single_cell_experiment(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL, assays = "sct")
+
+# TEST Pseudobulk
+pseudobulk = x |> get_pseudobulk(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL)
+
+# TEST metacell_2
+metacell = x |> filter(!is.na(metacell_2)) |> get_metacell(cache_directory = "/vast/scratch/users/shen.m/cellNexus", 
+                                                             repository = NULL, cell_aggregation = "metacell_2")
+
 
 # Check the number of cells per dataset
 x |> dplyr::count(dataset_id)
@@ -48,3 +60,4 @@ x |> filter(!empty_droplet) |> dplyr::count(alive) |>
 # Check doublet ratio
 x |> filter(!empty_droplet, alive) |> dplyr::count(scDblFinder.class) |> 
   collect() |> mutate(n_cells = sum(n), pct = n / n_cells * 100)
+

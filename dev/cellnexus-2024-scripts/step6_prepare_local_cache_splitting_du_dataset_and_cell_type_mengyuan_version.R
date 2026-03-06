@@ -227,7 +227,7 @@ job::job({
   dbExecute(con, "
   CREATE VIEW cell_map AS
   SELECT *
-  FROM read_parquet('/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_2_Jul_2024.parquet')
+  FROM read_parquet('/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_0_0_Jul_2024.parquet')
 ")
   
   # Perform the left join and save to Parquet
@@ -238,7 +238,7 @@ job::job({
     
       LEFT JOIN cell_map
         ON cell_metadata.cell_id = cell_map.cell_id
-        AND cell_metadata.dataset_id = cell_map.dataset_id
+        AND cell_metadata.file_id_cellNexus_single_cell = cell_map.file_id_cellNexus_single_cell
 
   ) TO  '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_mengyuan.parquet' -- MODIFY HERE: output final metadata parquet with new cell IDs (v1_3_2)
   (FORMAT PARQUET, COMPRESSION 'gzip');
@@ -653,6 +653,7 @@ tar_script({
   cbind_sce_by_dataset_id = function(target_name_grouped_by_dataset_id, file_id_db_file, cell_id_dict, my_store){
     
     my_dataset_id = unique(target_name_grouped_by_dataset_id$dataset_id) 
+    my_file_id = unique(target_name_grouped_by_dataset_id$file_id_cellNexus_single_cell) 
     
     file_id_db = 
       tbl(
@@ -676,14 +677,16 @@ tar_script({
       tbl(
         dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
         sql(glue("SELECT * FROM read_parquet('{cell_id_dict}')"))
-      ) |> 
-      filter(dataset_id == my_dataset_id) |> 
-      select(cell_id, dataset_id, new_cell_id) 
+      )  |> 
+      filter(file_id_cellNexus_single_cell == my_file_id)
+    # |> 
+    #   filter(dataset_id == my_dataset_id) |> 
+    #   select(cell_id, dataset_id, new_cell_id) 
     
     
     file_id_db = 
       file_id_db |> 
-      left_join(dataset_cell_dict, by = c("dataset_id", "cell_id" ), copy=T  )
+      left_join(dataset_cell_dict, by = c("file_id_cellNexus_single_cell", "cell_id" ), copy=T  )
     
     # Parallelise
     cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
@@ -697,7 +700,10 @@ tar_script({
       mutate(
         sce = bplapply(
           sce_target_name,
-          FUN = function(x) tar_read_raw(x, store = my_store),  # Read the raw SingleCellExperiment object
+          FUN = function(x) tar_read_raw(x, store = my_store) |> 
+            select(.cell, donor_id, dataset_id, sample_id, cell_type) |> 
+            mutate(sample_id = as.factor(sample_id)) # lighter
+            ,  # Read the raw SingleCellExperiment object
           BPPARAM = bp  # Use the defined parallel backend
         )) |> 
       # This should not be needed, but there are some data sets with zero cells 
@@ -788,6 +794,7 @@ tar_script({
   cbind_sct_by_dataset_id = function(target_name_grouped_by_dataset_id, file_id_db_file, cell_id_dict, my_store){
     
     my_dataset_id = unique(target_name_grouped_by_dataset_id$dataset_id) 
+    my_file_id = unique(target_name_grouped_by_dataset_id$file_id_cellNexus_single_cell) 
     
     file_id_db = 
       tbl(
@@ -811,14 +818,16 @@ tar_script({
       tbl(
         dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
         sql(glue("SELECT * FROM read_parquet('{cell_id_dict}')"))
-      ) |> 
-      filter(dataset_id == my_dataset_id) |> 
-      select(cell_id, dataset_id, new_cell_id) 
+      )  |> 
+      filter(file_id_cellNexus_single_cell == my_file_id)
+    # |> 
+    #   filter(dataset_id == my_dataset_id) |> 
+    #   select(cell_id, dataset_id, new_cell_id) 
     
     
     file_id_db = 
       file_id_db |> 
-      left_join(dataset_cell_dict, by = c("dataset_id", "cell_id"), copy=T  )
+      left_join(dataset_cell_dict, by = c("file_id_cellNexus_single_cell", "cell_id"), copy=T  )
     
     # Parallelise
     cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
@@ -837,8 +846,9 @@ tar_script({
             }
             
           tar_read_raw(x, store = my_store) |>
-            select(.cell, observation_joinid = observation_joinid.x,
-                   donor_id, dataset_id, sample_id, cell_type)
+            select(.cell, donor_id, dataset_id, sample_id, cell_type) |>
+            mutate(sample_id = as.factor(sample_id))
+          
           },  # Read the raw SingleCellExperiment object
           BPPARAM = bp  # Use the defined parallel backend
         )) |> 
@@ -999,7 +1009,7 @@ tar_script({
     
     tar_target(
       cell_id_dict,
-      "/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/dataset_cell_dict_v1_2_2_Jul_2024.parquet", # MODIFY HERE: cell_id dictionary parquet
+      "/vast/projects//cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_0_0_Jul_2024.parquet", # MODIFY HERE: cell_id dictionary parquet
       packages = c( "arrow","dplyr","duckdb")
       
     ),
@@ -1061,8 +1071,8 @@ tar_script({
       create_chunks_for_reading_and_saving(dataset_id_sample_id_target_names, cell_metadata) |> 
         
         # # FOR TESTING PURPOSE ONLY
-        # filter(sample_id %in% c("de79c3b20c3ce64b0e8295f40282b896___expr2-human-651well.",
-        #                         "299243f9fc4bdbc85e4515bfb78f5477")) |>
+        # filter(file_id_cellNexus_single_cell %in% c("3cef5b6aa0f5772485bb710f71e69456___1.h5ad",
+        #                                             "cd2caa6de850f73af4ca78a2ea307dd4___1.h5ad")) |>
         
         group_by(dataset_id, sample_chunk, cell_chunk, file_id_cellNexus_single_cell) |>
         tar_group(),
