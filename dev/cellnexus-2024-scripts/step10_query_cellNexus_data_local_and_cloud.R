@@ -2,10 +2,11 @@
 library(dplyr)
 library(cellNexus)
 library(stringr)
+library(zellkonverter)
 
 cache = "~/scratch/cache_temp"
 
-x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet")
+x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet")
 x = x |>
   dplyr::filter(
     self_reported_ethnicity == "African" &
@@ -13,6 +14,11 @@ x = x |>
       tissue == "lung parenchyma" &
       cell_type |> stringr::str_like("%CD4%")
   ) |> filter(empty_droplet == FALSE, alive == TRUE, scDblFinder.class!="doublet")
+
+
+# One anndata
+anndata = readH5AD("~/scratch/cellNexus/cellxgene/01-07-2024/counts/9e62207287ebeaa020d3e92d17b01f8e___1.h5ad", reader="R",use_hdf5 = T)
+anndata
 
 # Test SCE
 sce = x |> 
@@ -29,13 +35,20 @@ rank = x |>
 # TEST SCT
 sct = x |> get_single_cell_experiment(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL, assays = "sct")
 
-# TEST Pseudobulk
-pseudobulk = x |> get_pseudobulk(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL)
+pseudobulk = x |> 
+  get_pseudobulk(cache_directory = "/vast/scratch/users/shen.m/cellNexus", repository = NULL) 
 
-# TEST metacell_2
-metacell = x |> filter(!is.na(metacell_2)) |> get_metacell(cache_directory = "/vast/scratch/users/shen.m/cellNexus", 
-                                                             repository = NULL, cell_aggregation = "metacell_2")
-
+# TEST metacell_256
+caecum_metacell_256 = get_metadata(cache_directory = cache, 
+                                 cloud_metadata = NULL, 
+                                 local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet") |>
+  filter(!is.na(metacell_256),
+         empty_droplet == FALSE,
+         alive == TRUE,
+         scDblFinder.class != "doublet") |>
+  filter(tissue  == "caecum epithelium") |> 
+  get_metacell(cache_directory = "/vast/scratch/users/shen.m/cellNexus", cell_aggregation = "metacell_256", repository = NULL)
+caecum_metacell_256
 
 # Check the number of cells per dataset
 x |> dplyr::count(dataset_id)

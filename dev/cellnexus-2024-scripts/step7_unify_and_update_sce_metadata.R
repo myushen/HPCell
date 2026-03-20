@@ -96,7 +96,16 @@ job::job({
     "monaco",
     "alive_1",
     "cell_id_1",
-    "dataset_id_4"
+    "dataset_id_4",
+    "X_umap1",
+    "X_umap2",
+    "observation_originalid",
+    "subsets_Mito_sum",
+    "subsets_Mito_detected",
+    "file_id_cellNexus_single_cell_1",
+    "ensemble_joinid",
+    "cell_type_unified",
+    "data_driven_ensemble"
   )
   
   pattern_drop <- c(
@@ -256,7 +265,7 @@ job::job({
     
     
 
-  ) TO '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet'
+  ) TO '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet'
   (FORMAT PARQUET, COMPRESSION 'zstd');
   "
   
@@ -274,7 +283,7 @@ job::job({
 })
 
 x = tbl(dbConnect(duckdb::duckdb(), dbdir = ":memory:"),  
-        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet')") ) # MODIFY HERE: input metadata parquet path
+        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet')") ) # MODIFY HERE: input metadata parquet path
 
 # Split cell_metadata to cellnexus_metadata, original census_metadata, and metacell_metadata (host Rshiny on smaller file)
 # ---- Split: read metadata.1.4.0.parquet once, write smaller derivative Parquets ----
@@ -284,7 +293,7 @@ job::job({
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
-  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet" # MODIFY HERE: input metadata parquet path
+  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet" # MODIFY HERE: input metadata parquet path
   out_dir <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan"
   
   DBI::dbExecute(
@@ -303,17 +312,17 @@ job::job({
   
   # Strip sample annotation from cellnexus annotation doesn't save too much (less than 3Mb), thus keep in one.
   remove_cols <- c(
-    "cell_chunk", "cell_type", "cell_type_ontology_term_id",
-    "data_driven_ensemble", "default_embedding", "ensemble_joinid",
-    "observation_originalid", "run_from_cell_id", "suspension_type"
+    "cell_type", "cell_type_ontology_term_id", "data_driven_ensemble", "ensemble_joinid",
+    "observation_originalid", "assay", "assay_ontology_term_id", "development_stage", "development_stage_ontology_term_id",
+    "disease", "disease_ontology_term_id", "donor_id", "is_primary_data", "organism", "organism_ontology_term_id",
+    "self_reported_ethnicity", "self_reported_ethnicity_ontology_term_id",
+    "sex", "sex_ontology_term_id", "tissue", "tissue_ontology_term_id"
   )
   
   # CellNexus metadata (smaller file for Shiny): drop heavy / internal columns by name patterns
   drop_cellnexus <- unique(c(
     intersect(remove_cols, cols),
-    cols[grepl("metacell", cols)],
-    cols[grepl("^subsets_", cols)],
-    cols[grepl("^high_", cols)]
+    cols[grepl("metacell", cols)]
   ))
   keep_cellnexus <- setdiff(cols, drop_cellnexus)
   select_cellnexus <- paste(sql_id(keep_cellnexus), collapse = ", ")
@@ -327,7 +336,7 @@ job::job({
         SELECT {DBI::SQL(select_cellnexus)}
         FROM metadata
       )
-      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.1.4.0.parquet'))}
+      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.2.0.0.parquet'))}
       (FORMAT PARQUET, COMPRESSION 'brotli');
       "
     )
@@ -337,7 +346,10 @@ job::job({
   census_cols <- intersect(
     c(
       "observation_joinid", "dataset_id", "sample_id", "cell_type",
-      "cell_type_ontology_term_id", "default_embedding", "run_from_cell_id", "suspension_type"
+      "cell_type_ontology_term_id", "assay", "assay_ontology_term_id", "development_stage", "development_stage_ontology_term_id",
+      "disease", "disease_ontology_term_id", "donor_id", "is_primary_data", "organism", "organism_ontology_term_id",
+      "self_reported_ethnicity", "self_reported_ethnicity_ontology_term_id",
+      "sex", "sex_ontology_term_id", "tissue", "tissue_ontology_term_id"
     ),
     cols
   )
@@ -352,7 +364,7 @@ job::job({
       SELECT {DBI::SQL(select_census)}
       FROM metadata
     )
-    TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.1.4.0.parquet'))}
+    TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.2.0.0.parquet'))}
     (FORMAT PARQUET, COMPRESSION 'brotli');
     "
     )
@@ -372,7 +384,7 @@ job::job({
       SELECT {DBI::SQL(select_metacell)}
       FROM metadata
     )
-    TO {DBI::dbQuoteString(con, file.path(out_dir, 'metacell_metadata.1.4.0.parquet'))}
+    TO {DBI::dbQuoteString(con, file.path(out_dir, 'metacell_metadata.2.0.0.parquet'))}
     (FORMAT PARQUET, COMPRESSION 'brotli');
     "
     )

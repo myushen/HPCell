@@ -278,6 +278,38 @@ tar_script({
   library(tarchetypes)
   library(crew)
   library(crew.cluster)
+  
+  # Helper (optional) to avoid repetition
+  new_elastic <- function(name, mem_gb, time_min, workers, crashes_max, cpus_per_task = 2, backup = NULL) {
+    crew_controller_slurm(
+      name = name,
+      workers = workers,
+      crashes_max = crashes_max,
+      seconds_idle = 30,
+      options_cluster = crew_options_slurm(
+        memory_gigabytes_required = mem_gb,
+        cpus_per_task = cpus_per_task,
+        time_minutes = time_min
+      ),
+      backup = backup
+    )
+  }
+  
+  # Small → large, with fallbacks to the next size up
+  elastic_160 <- new_elastic("elastic_160", 160, 60 * 24, workers = 8,  crashes_max = 2)
+  elastic_120  <- new_elastic("elastic_120",  120,  60 * 4,  workers = 16, crashes_max = 1, cpus_per_task = 8, backup = elastic_160)
+  elastic_80  <- new_elastic("elastic_80",   80,  60 * 4,  workers = 24, crashes_max = 1, cpus_per_task = 8, backup = elastic_120)
+  elastic_40  <- new_elastic("elastic_40",   40,  60 * 4,  workers = 32, crashes_max = 1, cpus_per_task = 8, backup = elastic_80)
+  elastic_20  <- new_elastic("elastic_20",   20,  60 * 4,  workers = 48, crashes_max = 1, cpus_per_task = 8, backup = elastic_40)
+  elastic_10   <- new_elastic("elastic_10",   10, 60 * 4,  workers = 150, crashes_max = 6, cpus_per_task = 8, backup = elastic_20)
+  
+  elastic_5_minimal   <- new_elastic("elastic_5_minimal",     5, 60 * 4,  workers = 300, crashes_max = 6, cpus_per_task = 2, backup = elastic_10)
+  
+  
+  # Group for targets (small → large)
+  controllers <- crew_controller_group(
+    elastic_10, elastic_20, elastic_40, elastic_80, elastic_120, elastic_160, elastic_5_minimal
+  )
   tar_option_set(
     memory = "transient", 
     garbage_collection = 100, 
@@ -285,86 +317,12 @@ tar_script({
     retrieval = "worker", 
     error = "continue", 
     cue = tar_cue(mode = "never"),
-    #debug = "dataset_id_sce", 
+    format = "qs",
     
     workspace_on_error = TRUE,
-    controller = crew_controller_group(
-      list(
-        crew_controller_slurm(
-          name = "elastic",
-          workers = 300,
-          tasks_max = 20,
-          seconds_idle = 30,
-          crashes_error = 10,
-          options_cluster = crew_options_slurm(
-            #memory_gigabytes_required = c(10, 20, 40, 80, 160), 
-            memory_gigabytes_required = c(30, 45, 65, 80, 160), 
-            cpus_per_task = c(2, 2, 5, 10, 20), 
-            time_minutes = c(30, 30, 30, 60*4, 60*24),
-            verbose = T
-          )
-        ),
-        
-        crew_controller_slurm(
-          name = "tier_1", 
-          script_lines = "#SBATCH --mem 8G",
-          slurm_cpus_per_task = 1, 
-          workers = 300, 
-          tasks_max = 50,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        ),
-        
-        crew_controller_slurm(
-          name = "tier_2",
-          script_lines = "#SBATCH --mem 10G",
-          slurm_cpus_per_task = 1,
-          workers = 300,
-          tasks_max = 10,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        ),
-        crew_controller_slurm(
-          name = "tier_3",
-          script_lines = "#SBATCH --mem 20G",
-          slurm_cpus_per_task = 1,
-          workers = 200,
-          tasks_max = 10,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        ),
-        crew_controller_slurm(
-          name = "tier_4",
-          workers = 200,
-          tasks_max = 10,
-          crashes_error = 5, 
-          seconds_idle = 30,
-          options_cluster = crew_options_slurm(
-            memory_gigabytes_required = c(60, 90, 120, 240), 
-            cpus_per_task = c(2), 
-            time_minutes = c(60*24),
-            verbose = T
-          )
-        ),
-        crew_controller_slurm(
-          name = "tier_5",
-          script_lines = "#SBATCH --mem 150G",
-          slurm_cpus_per_task = 1,
-          workers = 2,
-          tasks_max = 10,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        )
-      )
-    ), 
+    controller = controllers, 
     trust_object_timestamps = TRUE
-    #workspaces = "dataset_id_sce_52dbec3c15f98d66"
   )
-  
   
   save_anndata = function(dataset_id_sce, cache_directory){
     
@@ -629,21 +587,27 @@ tar_script({
     
     dir.create(cache_directory, showWarnings = FALSE, recursive = TRUE)
     
-
+    if (is.null(dataset_id_sce)) return(NULL)
+    
     .x = dataset_id_sce |> pull(sct) |> _[[1]]
     
-    # Some sct have 0 cells after QC
-    if (ncol(.x) == 0 || is.null(.x)) return(NULL)
+    # Fix: check is.null BEFORE ncol() to avoid `argument is of length zero`
+    if (is.null(.x) || ncol(.x) == 0) return(NULL)
     
     .y = dataset_id_sce |> pull(file_id_cellNexus_single_cell) |> _[[1]] |> str_remove("\\.h5ad")
     
     .x |> assays() |> names() = "sct"
     
-    # Save the experiment data to the specified counts cache directory
-    .x |> save_experiment_data(glue("{cache_directory}/{.y}"))
+    # Wrap save with explicit error logging so the real cause is visible. Strange it shouldnt fail, which passed in debug mode
+    tryCatch(
+      .x |> save_experiment_data(glue("{cache_directory}/{.y}")),
+      error = function(e) {
+        message(glue::glue("[save_anndata_sct] FAILED for {.y}: {conditionMessage(e)}"))
+        stop(e)
+      }
+    )
     
-    return(TRUE)  # Indicate successful saving
-    
+    return(TRUE)
   }
   
   # Because they have an inconsistent failure. If I start the pipeline again they might work. Strange.
@@ -689,7 +653,7 @@ tar_script({
       left_join(dataset_cell_dict, by = c("file_id_cellNexus_single_cell", "cell_id" ), copy=T  )
     
     # Parallelise
-    cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
+    cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))-1
     bp <- MulticoreParam(workers = cores , progressbar = TRUE)  # Adjust the number of workers as needed
     
     # Begin processing the data pipeline with the initial dataset 'target_name_grouped_by_dataset_id'
@@ -830,7 +794,7 @@ tar_script({
       left_join(dataset_cell_dict, by = c("file_id_cellNexus_single_cell", "cell_id"), copy=T  )
     
     # Parallelise
-    cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
+    cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1)) -1
     bp <- MulticoreParam(workers = cores , progressbar = TRUE)  # Adjust the number of workers as needed
     
     # Begin processing the data pipeline with the initial dataset 'target_name_grouped_by_dataset_id'
@@ -1031,7 +995,7 @@ tar_script({
       packages = "tidySingleCellExperiment",
       pattern = map(target_name),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "elastic")
+        crew = tar_resources_crew(controller = "elastic_5_minimal")
       )
     ),
     
@@ -1051,7 +1015,7 @@ tar_script({
       packages = "tidySingleCellExperiment",
       pattern = map(sct_target_name),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "elastic")
+        crew = tar_resources_crew(controller = "elastic_5_minimal")
       )
     ),
     
@@ -1062,7 +1026,7 @@ tar_script({
         dplyr::rename(sce_target_name = target_name.x, 
                       sct_target_name = target_name.y),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "elastic")
+        crew = tar_resources_crew(controller = "elastic_5_minimal")
       )
     ),
     
@@ -1078,7 +1042,7 @@ tar_script({
         tar_group(),
       iteration = "group",
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "elastic")
+        crew = tar_resources_crew(controller = "elastic_5_minimal")
       ), 
       packages = c("arrow", "duckdb", "dplyr", "glue", "targets")
       
@@ -1090,7 +1054,7 @@ tar_script({
       pattern = map(target_name_grouped_by_dataset_id),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb",  "BiocParallel", "parallelly"),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "tier_4")
+        crew = tar_resources_crew(controller = "elastic_20")
       )
     ),
     
@@ -1100,7 +1064,7 @@ tar_script({
       pattern = map(target_name_grouped_by_dataset_id),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb",  "BiocParallel", "parallelly"),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "tier_4")
+        crew = tar_resources_crew(controller = "elastic_20")
       )
     ),
     
@@ -1111,7 +1075,7 @@ tar_script({
       pattern = map(dataset_id_sce),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb",  "BiocParallel", "parallelly", "purrr"),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "tier_4")
+        crew = tar_resources_crew(controller = "elastic_20")
       )
     ),
     
@@ -1122,7 +1086,7 @@ tar_script({
       pattern = map(dataset_id_sce),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly"),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "tier_4")
+        crew = tar_resources_crew(controller = "elastic_20")
       )
     ),
 
@@ -1132,7 +1096,7 @@ tar_script({
       pattern = map(dataset_id_sce),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly"),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "tier_4")
+        crew = tar_resources_crew(controller = "elastic_20")
       )
     ),
 
@@ -1142,17 +1106,17 @@ tar_script({
       pattern = map(dataset_id_sce),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array"),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "tier_4")
+        crew = tar_resources_crew(controller = "elastic_20")
       )
     ),
     
     tar_target(
       saved_sct,
-      insistent_save_anndata_sct(dataset_id_sct, paste0(cache_directory, "/sct")),
+      save_anndata_sct(dataset_id_sct, paste0(cache_directory, "/sct")),
       pattern = map(dataset_id_sct),
       packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array"),
       resources = tar_resources(
-        crew = tar_resources_crew(controller = "tier_4")
+        crew = tar_resources_crew(controller = "elastic_20")
       )
     )
   )
@@ -1169,12 +1133,19 @@ job::job({
   
 })
 
-missing_cells_tbl = tar_read(missing_cells_tbl, store = store_file_cellNexus)
-missing_cells_tbl <- map(missing_cells_tbl$missing_cells, ~ {.x}) |> bind_rows()
-missing_cells <- missing_cells_tbl |> pull(cell_id)
+missing_cells_tbl = tar_read(missing_cells_tbl, store = store_file_cellNexus) |> 
+  unnest(missing_cells)
+  #map(missing_cells_tbl$missing_cells, ~ {.x}) |> bind_rows()
 
-cell_metadata |> filter(!cell_id %in% missing_cells) |> 
-  
+#missing_cells_tbl |> write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cells_to_remove_in_metadata_Jul_2024.parquet")
+missing_cells_tbl <- read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cells_to_remove_in_metadata_Jul_2024.parquet")
+
+filtered_cell_metadata = cell_metadata |> anti_join(missing_cells_tbl, by = c("file_id_cellNexus_single_cell",
+                                                     "new_cell_id" = "cell_id"), copy = T)
+
+filtered_cell_metadata |> 
+  collect() |> 
   # This method of save parquet to parquet is faster 
-  cellNexus:::duckdb_write_parquet(path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet") # MODIFY HERE: output parquet after filtering missing cells
+  arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet",
+                       compression = "zstd") # MODIFY HERE: output parquet after filtering missing cells
 

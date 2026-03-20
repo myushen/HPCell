@@ -35,93 +35,53 @@ tar_script({
   library(tarchetypes)
   library(crew)
   library(crew.cluster)
+  
+  # Helper (optional) to avoid repetition
+  new_elastic <- function(name, mem_gb, time_min, workers, crashes_max, cpus_per_task = 2, backup = NULL) {
+    crew_controller_slurm(
+      name = name,
+      workers = workers,
+      crashes_max = crashes_max,
+      seconds_idle = 30,
+      options_cluster = crew_options_slurm(
+        memory_gigabytes_required = mem_gb,
+        cpus_per_task = cpus_per_task,
+        time_minutes = time_min
+      ),
+      backup = backup
+    )
+  }
+  
+  # Small → large, with fallbacks to the next size up
+  elastic_160 <- new_elastic("elastic_160", 160, 60 * 24, workers = 8,  crashes_max = 2)
+  elastic_120  <- new_elastic("elastic_120",  120,  60 * 4,  workers = 16, crashes_max = 1, cpus_per_task = 8, backup = elastic_160)
+  elastic_80  <- new_elastic("elastic_80",   80,  60 * 4,  workers = 24, crashes_max = 1, cpus_per_task = 8, backup = elastic_120)
+  elastic_40  <- new_elastic("elastic_40",   40,  60 * 4,  workers = 32, crashes_max = 1, cpus_per_task = 8, backup = elastic_80)
+  elastic_20  <- new_elastic("elastic_20",   20,  60 * 4,  workers = 48, crashes_max = 1, cpus_per_task = 8, backup = elastic_40)
+  elastic_10   <- new_elastic("elastic_10",   10, 60 * 4,  workers = 150, crashes_max = 6, cpus_per_task = 8, backup = elastic_20)
+  
+  elastic_5_minimal   <- new_elastic("elastic_5_minimal",     5, 60 * 4,  workers = 300, crashes_max = 6, cpus_per_task = 2, backup = elastic_10)
+  
+  
+  # Group for targets (small → large)
+  controllers <- crew_controller_group(
+    elastic_10, elastic_20, elastic_40, elastic_80, elastic_120, elastic_160, elastic_5_minimal
+  )
   tar_option_set(
     memory = "transient", 
     garbage_collection = 100, 
     storage = "worker", 
     retrieval = "worker", 
     error = "continue", 
-    cue = tar_cue(mode = "thorough"),
-    #debug = "dataset_id_sce", 
+    cue = tar_cue(mode = "never"),
     
     workspace_on_error = TRUE,
-    controller = crew_controller_group(
-      list(
-        crew_controller_slurm(
-          name = "elastic",
-          workers = 300,
-          tasks_max = 20,
-          seconds_idle = 30,
-          crashes_error = 10,
-          options_cluster = crew_options_slurm(
-            memory_gigabytes_required = c(40, 60, 80, 120, 160), 
-            #memory_gigabytes_required = c(200, 300, 350, 400, 500), 
-            cpus_per_task = c(2, 2, 5, 10, 20), 
-            time_minutes = c(30, 30, 30, 60*4, 60*24),
-            verbose = T
-          )
-        ),
-        
-        crew_controller_slurm(
-          name = "tier_1", 
-          script_lines = "#SBATCH --mem 8G",
-          slurm_cpus_per_task = 1, 
-          workers = 300, 
-          tasks_max = 50,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        ),
-        
-        crew_controller_slurm(
-          name = "tier_2",
-          script_lines = "#SBATCH --mem 10G",
-          slurm_cpus_per_task = 1,
-          workers = 300,
-          tasks_max = 10,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        ),
-        crew_controller_slurm(
-          name = "tier_3",
-          script_lines = "#SBATCH --mem 20G",
-          slurm_cpus_per_task = 1,
-          workers = 200,
-          tasks_max = 10,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        ),
-        crew_controller_slurm(
-          name = "tier_4",
-          workers = 200,
-          tasks_max = 10,
-          crashes_error = 5, 
-          seconds_idle = 30,
-          options_cluster = crew_options_slurm(
-            memory_gigabytes_required = c(40, 80, 100, 150, 240), 
-            #memory_gigabytes_required = c(200, 250, 350, 450), 
-            cpus_per_task = c(2), 
-            time_minutes = c(60*24),
-            verbose = T
-          )
-        ),
-        crew_controller_slurm(
-          name = "tier_5",
-          script_lines = "#SBATCH --mem 400G",
-          slurm_cpus_per_task = 1,
-          workers = 2,
-          tasks_max = 10,
-          verbose = T,
-          crashes_error = 5, 
-          seconds_idle = 30
-        )
-      )
-    ), 
+    controller = controllers, 
     trust_object_timestamps = TRUE
     #workspaces = "dataset_id_sce_52dbec3c15f98d66"
   )
+  
+  
 get_dataset_id = function(target_name, my_store){
   sce = tar_read_raw(target_name, store = my_store)
   
@@ -181,22 +141,8 @@ cbind_sce_by_dataset_id = function(target_name_grouped_by_dataset_id,
   
   
   # Parallelise
-  cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
+  cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1)) -1
   bp <- MulticoreParam(workers = cores, progressbar = TRUE)
-  
-  bplapply_with_fallback <- function(X, FUN, BPPARAM) {
-    tryCatch(
-      bplapply(X, FUN = FUN, BPPARAM = BPPARAM),
-      error = function(e) {
-        if (grepl("wrong args for environment subassignment", conditionMessage(e))) {
-          message("bplapply failed with reducer error, falling back to lapply")
-          lapply(X, FUN = FUN)
-        } else {
-          stop(e)
-        }
-      }
-    )
-  }
   
   # Begin processing the data pipeline with the initial dataset 'target_name_grouped_by_dataset_id'
   sce_df = 
@@ -205,7 +151,7 @@ cbind_sce_by_dataset_id = function(target_name_grouped_by_dataset_id,
     nest(cells = cell_id) |> 
     # Step 1: Read raw data for each 'target_name' and store it in a new column 'sce'
     mutate(
-      sce = bplapply_with_fallback(
+      sce = bplapply(
         target_name,
         FUN = function(x) tar_read_raw(x, store = my_store),
         BPPARAM = bp
@@ -325,7 +271,7 @@ list(
     packages = "tidySingleCellExperiment",
     pattern = map(target_name),
     resources = tar_resources(
-      crew = tar_resources_crew(controller = "elastic")
+      crew = tar_resources_crew(controller = "elastic_10")
     )
   ),
   
@@ -345,7 +291,7 @@ list(
       tar_group(),
     iteration = "group",
     resources = tar_resources(
-      crew = tar_resources_crew(controller = "elastic")
+      crew = tar_resources_crew(controller = "elastic_5_minimal")
     ), 
     packages = c("arrow", "duckdb", "dplyr", "glue", "targets")
     
@@ -357,7 +303,7 @@ list(
     pattern = map(target_name_grouped_by_dataset_id),
     packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb",  "BiocParallel", "parallelly"),
     resources = tar_resources(
-      crew = tar_resources_crew(controller = "tier_4")
+      crew = tar_resources_crew(controller = "elastic_20")
     )
   ),
   tar_target(
@@ -366,7 +312,7 @@ list(
     pattern = map(dataset_id_sce),
     packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly"),
     resources = tar_resources(
-      crew = tar_resources_crew(controller = "tier_4")
+      crew = tar_resources_crew(controller = "elastic_20")
     )
   )
 )
