@@ -151,7 +151,7 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
   
   # Produce the ensemble map
   df_map <- input_read_RNA_assay |>
-    dplyr::count(across(all_of(c("azimuth", "blueprint", "monaco", "cell_type_unified", "ensemble_joinid"))), name = "NCells") |>
+    dplyr::count(across(any_of(c("azimuth", "blueprint", "monaco", "cell_type_unified", "ensemble_joinid"))), name = "NCells") |>
     as_tibble() |>
     mutate(cellxgene = if (has_cellxgene) {
       if_else(cell_type_unified %in% nonimmune_cellxgene, "non immune", 
