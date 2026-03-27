@@ -166,13 +166,6 @@ job::job({
     select_exprs <- c(select_exprs, glue::glue("FALSE AS {sql_id('alive')}"))
   }
   
-  # Update atlas hierarchy to include a date suffix (as per previous COPY logic)
-  if ("atlas_id" %in% raw_cols) {
-    select_exprs <- c(select_exprs, glue::glue("({sql_id('atlas_id')} || '/01-07-2024') AS {sql_id('atlas_id')}")) # MODIFY HERE: date suffix for atlas_id
-  } else {
-    select_exprs <- c(select_exprs, glue::glue("NULL::VARCHAR AS {sql_id('atlas_id')}"))
-  }
-  
   # Rename annotation columns
   select_exprs <- c(
     select_exprs,
@@ -241,7 +234,7 @@ job::job({
 ")
   
   # Perform left join and save to parquet
-  # MODIFY HERE: output metadata parquet path
+  # MODIFY HERE: output metadata parquet path and atlas_id
   copy_query <- "
   COPY (
     SELECT
@@ -249,7 +242,8 @@ job::job({
       lowConf_ethnicity_df.ethnicity_flagging_score,
       lowConf_ethnicity_df.low_confidence_ethnicity,
       sample_celltype_count.\".aggregated_cells\",
-      COALESCE(imputed_ethnicity_df.imputed_ethnicity, cell_metadata.self_reported_ethnicity) AS imputed_ethnicity -- Use imputed_ethnicity if present
+      COALESCE(imputed_ethnicity_df.imputed_ethnicity, cell_metadata.self_reported_ethnicity) AS imputed_ethnicity, -- Use imputed_ethnicity if present
+      'cellxgene_2024/0.1.0' AS atlas_id
       
     FROM cell_metadata
     
@@ -265,7 +259,7 @@ job::job({
     
     
 
-  ) TO '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet'
+  ) TO '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.1.0.parquet'
   (FORMAT PARQUET, COMPRESSION 'zstd');
   "
   
@@ -275,25 +269,23 @@ job::job({
   # Disconnect from the database
   dbDisconnect(con, shutdown = TRUE)
   
-  #system("~/bin/rclone copy /vast/projects/cellxgene_curated/cellNexus/cell_metadata_cell_type_consensus_v1_0_4.parquet box_adelaide:/Mangiola_ImmuneAtlas/taskforce_shared_folder/")
-  
   print("Done.")
   
   
 })
 
 x = tbl(dbConnect(duckdb::duckdb(), dbdir = ":memory:"),  
-        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet')") ) # MODIFY HERE: input metadata parquet path
+        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.1.0.parquet')") ) # MODIFY HERE: input metadata parquet path
 
 # Split cell_metadata to cellnexus_metadata, original census_metadata, and metacell_metadata (host Rshiny on smaller file)
-# ---- Split: read metadata.1.4.0.parquet once, write smaller derivative Parquets ----
+# ---- Split: read metadata.x.y.z.parquet once, write smaller derivative Parquets ----
 # This avoids loading the full metadata into R memory and avoids duplicate-column issues in Parquet writes.
 job::job({
   
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
-  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet" # MODIFY HERE: input metadata parquet path
+  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.1.0.parquet" # MODIFY HERE: input metadata parquet path
   out_dir <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan"
   
   DBI::dbExecute(
@@ -336,7 +328,7 @@ job::job({
         SELECT {DBI::SQL(select_cellnexus)}
         FROM metadata
       )
-      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.2.0.0.parquet'))}
+      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.2.1.0.parquet'))}
       (FORMAT PARQUET, COMPRESSION 'brotli');
       "
     )
@@ -364,7 +356,7 @@ job::job({
       SELECT {DBI::SQL(select_census)}
       FROM metadata
     )
-    TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.2.0.0.parquet'))}
+    TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.2.1.0.parquet'))}
     (FORMAT PARQUET, COMPRESSION 'brotli');
     "
     )
@@ -384,7 +376,7 @@ job::job({
       SELECT {DBI::SQL(select_metacell)}
       FROM metadata
     )
-    TO {DBI::dbQuoteString(con, file.path(out_dir, 'metacell_metadata.2.0.0.parquet'))}
+    TO {DBI::dbQuoteString(con, file.path(out_dir, 'metacell_metadata.2.1.0.parquet'))}
     (FORMAT PARQUET, COMPRESSION 'brotli');
     "
     )
@@ -394,65 +386,6 @@ job::job({
 })
 
 
-# Check whether cellnexus_metadata parquet can be optimised further
-source("~/git_control/cellNexus/dev/data_optimisation_script.R")
+# # Check whether cellnexus_metadata parquet can be optimised further
+# source("~/git_control/cellNexus/dev/data_optimisation_script.R")
 
-
-
-
-
-# # Exclude missing_cells
-# job::job({
-#   con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-#   
-#   dbExecute(con, "
-#   CREATE VIEW current_metadata AS
-#   SELECT *
-#   FROM read_parquet('/vast/scratch/users/shen.m/cellNexus/metadata.1.0.9.parquet')
-# ")
-#   
-#   dbExecute(con, "
-#   CREATE VIEW old_metadata_without_missing_cells AS
-#   SELECT *
-#   FROM read_parquet('/vast/scratch/users/shen.m/cache_temp/metadata.1.0.8.parquet')
-# ")
-#   
-#   # Perform the left join and save to Parquet
-#   copy_query <- "
-#   COPY (
-#      SELECT 
-#         current_metadata.*,
-#         old_metadata_without_missing_cells.cell_id AS cell_id_2
-#       FROM current_metadata
-#       LEFT JOIN old_metadata_without_missing_cells
-#       ON current_metadata.cell_id = old_metadata_without_missing_cells.cell_id 
-#       AND current_metadata.sample_id = old_metadata_without_missing_cells.sample_id
-# 
-#       
-#   ) TO '/vast/scratch/users/shen.m/cellNexus/metadata.1.0.9_excluded_missing_cells.parquet'
-#   (FORMAT PARQUET, COMPRESSION 'gzip');
-# "
-#   
-#   # Execute the final query to write the result to a Parquet file
-#   dbExecute(con, copy_query)
-#   
-#   # Disconnect from the database
-#   dbDisconnect(con, shutdown = TRUE)
-#   
-#   print("Done.")
-#   
-# })
-# 
-# metadata = tbl(
-#   dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-#   sql("SELECT * FROM read_parquet('/vast/scratch/users/shen.m/cellNexus/metadata.1.0.9_excluded_missing_cells.parquet')")
-# ) |>filter(!is.na(cell_id_2)) |> select(-cell_id_2)
-# 
-# 
-# metadata |> 
-#   duckdb_write_parquet(path = metadata_path,
-#                        con = dbConnect(duckdb::duckdb(), dbdir = ":memory:"))
-# 
-# file.copy(metadata_path,
-#           to = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.0.9.parquet")
-# 
