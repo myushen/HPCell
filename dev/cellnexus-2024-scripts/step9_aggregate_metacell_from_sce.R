@@ -1,7 +1,7 @@
 library(targets)
 # aggregate metacell from metadata and save assays
-store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_3_0_metacell/" # MODIFY HERE: targets store directory for this pipeline
-cell_metadata_path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet" # MODIFY HERE: cell metadata parquet (used to dynamically derive metacell column names)
+store_file_cellNexus = "/vast/scratch/users/shen.m/targets_prepare_database_split_datasets_chunked_1_4_0_metacell/" # MODIFY HERE: targets store directory for this pipeline
+cell_metadata_path = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet" # MODIFY HERE: cell metadata parquet (used to dynamically derive metacell column names)
 
 tar_script({
   library(dplyr)
@@ -154,7 +154,7 @@ tar_script({
     list(
       tar_target(
         cell_metadata,
-        "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet", # MODIFY HERE: cell metadata parquet (must match cell_metadata_path above)
+        "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet", # MODIFY HERE: cell metadata parquet (must match cell_metadata_path above)
         deployment = "main",
         packages = c("arrow", "dplyr", "duckdb")
       ),
@@ -165,7 +165,7 @@ tar_script({
       ),
       tar_target(
         save_cache_directory,
-        "/vast/scratch/users/shen.m/cellNexus/cellxgene/01-07-2024", # MODIFY HERE: output directory where aggregated metacell anndata files are saved
+        "/vast/scratch/users/shen.m/cellNexus/cellxgene_2024/0.2.0", # MODIFY HERE: output directory where aggregated metacell anndata files are saved
         deployment = "main"
       )
     ),
@@ -173,7 +173,7 @@ tar_script({
       values = tibble(
         metacell_column = tbl(
           dbConnect(duckdb::duckdb(), dbdir = ":memory:"),
-          sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.1.4.0.parquet')") # MODIFY HERE: cell metadata parquet path inside SQL (must match cell_metadata_path above)
+          sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet')") # MODIFY HERE: cell metadata parquet path inside SQL (must match cell_metadata_path above)
         ) |> select(contains("metacell_")) |> colnames()
       ),
       names = metacell_column,
@@ -225,7 +225,7 @@ tar_errored(store = store_file_cellNexus)
 # aggregate_metacell(file_id_sce, "metacell_4")  # when debugging a specific branch
 
 # Check the number of file id should be created for metacell_2
-cache_dir = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/" # MODIFY HERE: directory used for verification queries below (contains metadata.1.4.0.parquet)
+cache_dir = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/" # MODIFY HERE: directory used for verification queries below (contains metadata.2.2.0.parquet)
 # Define all metacell levels
 metacell_levels <- c(2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536)
 metacell_names <- paste0("metacell_", metacell_levels)
@@ -235,7 +235,7 @@ file_ids <- function(metacell_col_name) {
   get_metadata(
     cache_directory = cache_dir,
     cloud_metadata = NULL,
-    local_metadata = file.path(cache_dir, "metadata.1.4.0.parquet")
+    local_metadata = file.path(cache_dir, "metadata.2.2.0.parquet")
   ) |>
     filter(
       !is.na(.data[[metacell_col_name]]),
@@ -276,7 +276,7 @@ result
 lung_metacell_256 = get_metadata(
   cache_directory = cache_dir,
   cloud_metadata = NULL,
-  local_metadata = file.path(cache_dir, "metadata.1.4.0.parquet")
+  local_metadata = file.path(cache_dir, "metadata.2.2.0.parquet")
 ) |> 
   filter(!is.na(metacell_256),
          empty_droplet == FALSE,
@@ -289,7 +289,7 @@ lung_metacell_256 = get_metadata(
 get_metadata(
   cache_directory = cache_dir,
   cloud_metadata = NULL,
-  local_metadata = file.path(cache_dir, "metadata.1.4.0.parquet")
+  local_metadata = file.path(cache_dir, "metadata.2.2.0.parquet")
 ) |> 
   filter(!is.na(metacell_256),
          empty_droplet == FALSE,

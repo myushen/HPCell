@@ -81,53 +81,6 @@ subset_samples <- function(dataset_id, observation_joinid, sample_id) {
   sce[, cells_to_subset]
 }
 
-# rename_features <- function(data) {
-#   edb <- EnsDb.Hsapiens.v86
-#   edb_df <- genes(edb,
-#                   columns = c("gene_name", "entrezid", "gene_biotype"),
-#                   filter = GeneIdFilter("ENSG", condition = "startsWith"),
-#                   return.type = "data.frame") 
-#   
-#   gene_names_map <- rowData(data) |> as.data.frame() |> tibble::rownames_to_column(var = "gene_id") |>
-#     dplyr::select(gene_id, feature_name) |>
-#     mutate(current_gene_names = gsub("_", "-", feature_name)) |> dplyr::left_join(edb_df, by = "gene_id") |>
-#     mutate(modified_gene_names = ifelse(stringr::str_like(current_gene_names, "%ENSG0%"), gene_name, current_gene_names))
-#   
-#   gene_names_map_tidy <- gene_names_map |>
-#     dplyr::filter(!is.na(modified_gene_names))
-#   
-#   # delete ensemble IDs if cant be converted to gene symbols
-#   rownames_to_delete <- gene_names_map |>
-#     dplyr::filter(is.na(modified_gene_names)) |> pull(gene_id)
-#   data <- data[!rownames(data) %in% rownames_to_delete, ]
-#   
-#   rownames(data) <- gene_names_map_tidy$modified_gene_names
-#   # access assay name
-#   assay_name <-  data@assays |> names() |> magrittr::extract2(1)
-#   counts_slot <- assay(data, assay_name)
-#   rownames(counts_slot) <- gene_names_map_tidy$modified_gene_names
-#   
-#   SummarizedExperiment::rowData(data)$feature_name <- NULL
-#   SummarizedExperiment::rowData(data)$gene_name <- gene_names_map_tidy$modified_gene_names
-#   
-#   data
-# }
-
-
-
-# computing_resources =  crew.cluster::crew_controller_slurm(
-#   name = "elastic",
-#   workers = 300,
-#   tasks_max = 20,
-#   seconds_idle = 30,
-#   crashes_error = 10,
-#   options_cluster = crew.cluster::crew_options_slurm(
-#     memory_gigabytes_required = c(25, 35, 40, 40, 70), 
-#     cpus_per_task = c(2, 2, 5, 10, 20), 
-#     time_minutes = c(60*4, 60*4, 60*4, 60*24, 60*24),
-#     verbose = T
-#   ))
-
 computing_resources = crew.cluster::crew_controller_slurm(
   #slurm_memory_gigabytes_per_cpu = 40, 
   slurm_memory_gigabytes_per_cpu = 25, 
@@ -145,7 +98,6 @@ tar_option_set(
   #cue = tar_cue(mode = "never"),
   cue = tar_cue(mode = "thorough"),
   error = "continue",
-  #debug = "sliced_sce_9c40d298d224bab6",
   controller = computing_resources
 )
 
@@ -178,9 +130,10 @@ list(
 )
 
 # tar_make(store = glue::glue("~/scratch/Census_final_run/{version}_new/split_h5ad_based_on_sample_id_target_store"),
-#          script = "~/git_control/HPCell/dev/cellnexus-2024-scripts/split_census_anndata_base_on_sample_id.R",
+#          script = "~/git_control/HPCell/dev/cellnexus-2024-scripts/step4_split_census_anndata_base_on_sample_id.R",
 #          reporter = "summary")
 
+# Debug if needed
 # tar_errored(store = "~/scratch/Census_final_run/split_h5ad_based_on_sample_id_target_store/")
 # tar_meta(store = "~/scratch/Census_final_run/split_h5ad_based_on_sample_id_target_store/") |>
 #   filter(!is.na(error)) |> pull(error)

@@ -59,7 +59,7 @@ sample_tbl <- sample_tbl |> left_join(sample_meta, by = "dataset_id") |> distinc
   ))
 
 
-# I need to add assay to census_samples_to_download_groups_MODIFIED.parquet, not workaround here
+# Append assay column
 sample_tbl = sample_tbl |> left_join(cellNexus::get_metadata(cache_directory = "/vast/scratch/users/shen.m/cellNexus") |> # MODIFY HERE: cellNexus local cache directory
                                        distinct(sample_id, assay) , 
                                      by = c("sample_2" = "sample_id"), 
@@ -67,7 +67,7 @@ sample_tbl = sample_tbl |> left_join(cellNexus::get_metadata(cache_directory = "
 
 
 sample_tbl = sample_tbl |> mutate(count_upper_bound = 20,
-                                  # base our filtering on % of expressed genes for panel technologies 500/20K : ?/462
+                                  # base our filtering on % of expressed genes for panel technologies 500/20K = x/462
                                   feature_thresh = ifelse(assay == "BD Rhapsody Targeted mRNA", 11, 200))
 
 sample_tbl <- saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sample_tbl_2024_Jul.rds") # MODIFY HERE: output path for sample_tbl RDS
@@ -128,11 +128,6 @@ sample_names <-
 functions = sliced_sample_tbl |> pull(method_to_apply)
 feature_thresh = sliced_sample_tbl |> pull(feature_thresh)
 
-
-# sample_names <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/sample_names_filtered_by_mengyuan_apr_2024.rds")
-# functions <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/functions.rds")
-# feature_thresh <- saveRDS("/vast/scratch/users/shen.m/cellNexus_run/feature_thresh.rds")
-
 my_store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store" # MODIFY HERE: HPCell targets store (used throughout this script)
 job::job({
   
@@ -143,7 +138,6 @@ job::job({
       store = my_store,
       gene_nomenclature = "ensembl",
       data_container_type = "anndata",
-      # tier = tiers, # WE DON"T NEED AS WE HAVE ELASTIC RESOURCES NOW
       computing_resources = list(
         
         crew.cluster::crew_controller_slurm(
@@ -154,9 +148,9 @@ job::job({
           crashes_error = 10,
           options_cluster = crew.cluster::crew_options_slurm(
            #memory_gigabytes_required = c(20, 35, 50, 75, 100, 150), 
-           memory_gigabytes_required = c(90, 120, 150, 180, 200), 
+           #memory_gigabytes_required = c(90, 120, 150, 180, 200), 
            #memory_gigabytes_required = c(70, 80, 100, 150, 200), 
-           # memory_gigabytes_required = c(45, 60, 75, 100, 120, 150), 
+            memory_gigabytes_required = c(45, 60, 75, 100, 120, 150), 
             cpus_per_task = c(2, 2, 5, 10, 20), 
             time_minutes = c(60*24, 60*24, 60*24, 60*24, 60*24),
             verbose = T
@@ -203,28 +197,29 @@ job::job({
     # metacell
     cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
 
-    # # Cell Chat
-    # ligand_receptor_cellchat(target_input = "sce_transformed",
-    #                          group_by = "cell_type_unified_ensemble") |>
+    # Cell Chat
+    ligand_receptor_cellchat(target_input = "sce_transformed",
+                             group_by = "cell_type_unified_ensemble") |>
     
     print()
   
   
 })
- #tar_invalidate(names = metacell_tbl, store = my_store )
-tar_meta(store = my_store) |> filter(!is.na(error)) |>  arrange(desc(time)) |> View()
-tar_meta(store = my_store) |> filter(!is.na(error)) |> distinct(name, error)
-tar_meta(starts_with("annotation_tbl_"), store = "/vast/scratch/users/shen.m/cellNexus_target_store") |> 
-  filter(!data |> is.na()) |> arrange(desc(time)) |> select(error, name)
 
-# Debug cellchat
-tar_workspace(ligand_receptor_tbl_f1dcd76261dd9c86, store = my_store, 
-              script = paste0(my_store,".R"))
-debugonce(cell_communication)
-cell_communication(sce_transformed, empty_droplets_tbl = empty_tbl, alive_identification_tbl = alive_tbl,
-                  doublet_identification_tbl = doublet_tbl, cell_type_tbl = cell_type_concensus_tbl,
-                  cell_type_column = "cell_type_unified_ensemble",
-                  feature_nomenclature = gene_nomenclature)
+# # View target metadata if needed
+# tar_meta(store = my_store) |> filter(!is.na(error)) |>  arrange(desc(time)) |> View()
+# tar_meta(store = my_store) |> filter(!is.na(error)) |> distinct(name, error)
+# tar_meta(starts_with("annotation_tbl_"), store = "/vast/scratch/users/shen.m/cellNexus_target_store") |> 
+#   filter(!data |> is.na()) |> arrange(desc(time)) |> select(error, name)
+# 
+# # Debug cellchat
+# tar_workspace(ligand_receptor_tbl_f1dcd76261dd9c86, store = my_store, 
+#               script = paste0(my_store,".R"))
+# debugonce(cell_communication)
+# cell_communication(sce_transformed, empty_droplets_tbl = empty_tbl, alive_identification_tbl = alive_tbl,
+#                   doublet_identification_tbl = doublet_tbl, cell_type_tbl = cell_type_concensus_tbl,
+#                   cell_type_column = "cell_type_unified_ensemble",
+#                   feature_nomenclature = gene_nomenclature)
 
 
 #' Pipeline for Lightening Annotations in High-Performance Computing Environment
@@ -267,7 +262,6 @@ tar_script({
     storage = "worker", 
     retrieval = "worker", 
     error = "continue", 
-    #debug = "annotation_tbl_light", 
     cue = tar_cue(mode = "never"), 
     controller = crew_controller_group(
       list(
@@ -278,7 +272,6 @@ tar_script({
           workers = 200, 
           tasks_max = 10,
           verbose = T,
-          #launch_max = 5, 
           seconds_idle = 30,
           slurm_time_minutes = 480
         ),
@@ -290,7 +283,6 @@ tar_script({
           workers = 200,
           tasks_max = 10,
           verbose = T,
-          #launch_max = 5, 
           seconds_idle = 30,
           slurm_time_minutes = 480
         ),
@@ -301,7 +293,6 @@ tar_script({
           workers = 200,
           tasks_max = 10,
           verbose = T,
-          #launch_max = 5, 
           seconds_idle = 30,
           slurm_time_minutes = 480
         ),
@@ -312,14 +303,12 @@ tar_script({
           workers = 30,
           tasks_max = 10,
           verbose = T,
-          #launch_max = 5, 
           seconds_idle = 30,
           slurm_time_minutes = 480
         )
       )
     ), 
     trust_object_timestamps = TRUE
-   # workspaces = "annotation_tbl_light_ffcd3d5a64bedf1f"
   )
   
   lighten_annotation = function(target_name, my_store ){
@@ -381,31 +370,6 @@ library(arrow)
 library(dplyr)
 library(duckdb)
 library(targets)
-# library(cellNexus)
-
-# cellNexus:::duckdb_write_parquet = function(data_tbl, output_parquet, compression = "gzip") {
-#   
-#   # Establish connection to DuckDB in-memory database
-#   con_write <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-#   
-#   # Register `data_tbl` within the DuckDB connection (this doesn't load it into memory)
-#   duckdb::duckdb_register(con_write, "data_tbl_view", data_tbl)
-#   
-#   # Use DuckDB's COPY command to write `data_tbl` directly to Parquet with compression
-#   copy_query <- paste0("
-#   COPY data_tbl_view TO '", output_parquet, "' (FORMAT PARQUET, COMPRESSION '", compression, "');
-#   ")
-#   
-#   # Execute the COPY command
-#   dbExecute(con_write, copy_query)
-#   
-#   # Unregister the temporary view
-#   duckdb::duckdb_unregister(con_write, "data_tbl_view")
-#   
-#   # Disconnect from the database
-#   dbDisconnect(con_write, shutdown = TRUE)
-# }
-
 
 # Write annotation light
 # MODIFY HERE: base cell_metadata parquet path inside the SQL string below
@@ -430,8 +394,6 @@ cell_annotation = cell_annotation |> mutate(
   blueprint_first_labels_fine = ifelse(is.na(blueprint_first_labels_fine), "Other", blueprint_first_labels_fine),
   monaco_first_labels_fine = ifelse(is.na(monaco_first_labels_fine), "Other", monaco_first_labels_fine),
   azimuth_predicted_celltype_l2=ifelse(is.na(azimuth_predicted_celltype_l2), "Other", azimuth_predicted_celltype_l2))
-
-#cell_annotation |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/annotation_tbl_light.parquet", compression = "zstd")
 
 empty_droplet = 
   tar_read(empty_tbl, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store") |> # MODIFY HERE: HPCell targets store (must match my_store above)
@@ -471,7 +433,6 @@ cell_type_concensus_tbl = cell_type_concensus_tbl |> mutate(cell_type_unified_en
 cell_metadata_joined = cell_metadata |> 
   left_join(empty_droplet, copy=TRUE) |>  
   left_join(cell_type_concensus_tbl, copy=TRUE) |>
-  #left_join(cell_annotation, copy=TRUE) |>  
   left_join(alive_cells, copy=TRUE) |> 
   left_join(doublet_cells, copy=TRUE) |>
   left_join(metacell, copy=TRUE)
@@ -489,7 +450,6 @@ cell_metadata_joined2 = cell_metadata_joined |> as_tibble() |>
   mutate(blueprint = ifelse(blueprint |> is.na(), "Other", blueprint)) |> 
   mutate(monaco = ifelse(monaco |> is.na(), "Other", monaco))
 
-# (!!!!) WHENEVER MAKE CHANGES, ALWAYS INCLUDE NEW Rhapsody DATA. Rhapsody TECH WERE UPDATED SEPARATELY in 2_1_rerun_hpcell_for_Rhapsody_targeted_panel.R. 
 cell_metadata_joined2 |>
   arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_annotation_2024_Jul.parquet", # MODIFY HERE: output cell annotation parquet (used as input to step6)
                        compression = "zstd")
@@ -502,7 +462,7 @@ duckdb::dbWriteTable(con, "lr_pathway_table", ligand_receptor_tbl, overwrite = T
 dbDisconnect(con)
 
 
-# 
+# Helper function to save parquet read by duckdb to parquet on disk
 # write_parquet_to_parquet = function(data_tbl, output_parquet, compression = "gzip") {
 #   
 #   # Establish connection to DuckDB in-memory database

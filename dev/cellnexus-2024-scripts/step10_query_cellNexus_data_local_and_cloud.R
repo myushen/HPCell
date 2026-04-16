@@ -6,14 +6,15 @@ library(zellkonverter)
 
 cache = "~/scratch/cache_temp"
 
-x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet")
+x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet")
 x = x |>
-  dplyr::filter(
+  keep_quality_cells()
+x = x |> dplyr::filter(
     self_reported_ethnicity == "African" &
       assay |> stringr::str_like("%10x%") & 
       tissue == "lung parenchyma" &
       cell_type |> stringr::str_like("%CD4%")
-  ) |> filter(empty_droplet == FALSE, alive == TRUE, scDblFinder.class!="doublet")
+  )
 
 
 # One anndata
@@ -41,11 +42,9 @@ pseudobulk = x |>
 # TEST metacell_256
 caecum_metacell_256 = get_metadata(cache_directory = cache, 
                                  cloud_metadata = NULL, 
-                                 local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.0.0.parquet") |>
-  filter(!is.na(metacell_256),
-         empty_droplet == FALSE,
-         alive == TRUE,
-         scDblFinder.class != "doublet") |>
+                                 local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet") |>
+  keep_quality_cells() |>
+  filter(!is.na(metacell_256)) |>
   filter(tissue  == "caecum epithelium") |> 
   get_metacell(cache_directory = "/vast/scratch/users/shen.m/cellNexus", cell_aggregation = "metacell_256", repository = NULL)
 caecum_metacell_256

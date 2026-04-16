@@ -1,11 +1,8 @@
 # Description:
-# This script performs data management tasks involving three single-cell datasets:
-# cellxgene, fibrosis, and prostate atlas. It reads metadata and dataset-specific information,
+# This script clean up and generate the ultimate metadata to ship to cellNexus. It reads metadata and dataset-specific information,
 # cleans and renames columns, and writes updated data back to disk. The process involves
 # connecting to databases in memory, executing SQL queries, and handling data in both
-# Parquet and HDF5 formats. Additionally, it sets up directories and tests data conversion
-# scripts for compatibility with Anndata structures. This is intended to unify metadata and
-# streamline data handling in preparation for analysis.
+# Parquet and HDF5 formats.
 
 library(duckdb)
 library(dbplyr)
@@ -54,7 +51,7 @@ job::job({
   # Single DuckDB connection: do the heavy transforms in SQL (avoid read/write/read on 50M+ rows)
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   
-  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_3_2_filtered_missing_cells_mengyuan.parquet"  # MODIFY HERE: Metadata input parquet path
+  raw_path <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_4_1_filtered_missing_cells_mengyuan.parquet"  # MODIFY HERE: Metadata input parquet path
   
   DBI::dbExecute(con, glue::glue("
   CREATE VIEW cell_metadata_raw AS
@@ -64,49 +61,50 @@ job::job({
   
   raw_cols <- DBI::dbGetQuery(con, "SELECT * FROM cell_metadata_raw LIMIT 0") |> names()
   
-  explicit_drop <- c(
-    "cell_",
-    "cell__1",
-    "dataset_id_1",
-    "dataset_id_1_1",
-    "cell__2",
-    "cell__3",
-    "dataset_id_2",
-    "dataset_id_3",
-    "sample_id_1",
-    "sample_id_2",
-    "sample_placeholder",
-    "cell_type_unified_ensemble_1",
-    "cell_type_1",
-    "dataset_id_2",
-    "observation_joinid_1",
-    "self_reported_ethnicity_1",
-    "donor_id_1",
-    "assay_1",
-    "blueprint_first_labels_fine_1",
-    "azimuth_predicted_celltype_l2_1",
-    "monaco_first_labels_fine_1",
-    "dataset_id_3",
-    "atlas_id_1",
-    "tissue_1",
-    "is_primary_data_1",
-    "cell_type_ontology_term_id_1",
-    "azimuth",
-    "blueprint",
-    "monaco",
-    "alive_1",
-    "cell_id_1",
-    "dataset_id_4",
-    "X_umap1",
-    "X_umap2",
-    "observation_originalid",
-    "subsets_Mito_sum",
-    "subsets_Mito_detected",
-    "file_id_cellNexus_single_cell_1",
-    "ensemble_joinid",
-    "cell_type_unified",
-    "data_driven_ensemble"
-  )
+  explicit_drop <- c()
+  # explicit_drop <- c(
+  #   "cell_",
+  #   "cell__1",
+  #   "dataset_id_1",
+  #   "dataset_id_1_1",
+  #   "cell__2",
+  #   "cell__3",
+  #   "dataset_id_2",
+  #   "dataset_id_3",
+  #   "sample_id_1",
+  #   "sample_id_2",
+  #   "sample_placeholder",
+  #   "cell_type_unified_ensemble_1",
+  #   "cell_type_1",
+  #   "dataset_id_2",
+  #   "observation_joinid_1",
+  #   "self_reported_ethnicity_1",
+  #   "donor_id_1",
+  #   "assay_1",
+  #   "blueprint_first_labels_fine_1",
+  #   "azimuth_predicted_celltype_l2_1",
+  #   "monaco_first_labels_fine_1",
+  #   "dataset_id_3",
+  #   "atlas_id_1",
+  #   "tissue_1",
+  #   "is_primary_data_1",
+  #   "cell_type_ontology_term_id_1",
+  #   "azimuth",
+  #   "blueprint",
+  #   "monaco",
+  #   "alive_1",
+  #   "cell_id_1",
+  #   "dataset_id_4",
+  #   "X_umap1",
+  #   "X_umap2",
+  #   "observation_originalid",
+  #   "subsets_Mito_sum",
+  #   "subsets_Mito_detected",
+  #   "file_id_cellNexus_single_cell_1",
+  #   "ensemble_joinid",
+  #   "cell_type_unified",
+  #   "data_driven_ensemble"
+  # )
   
   pattern_drop <- c(
     grep("^scores", raw_cols, value = TRUE),
@@ -243,7 +241,7 @@ job::job({
       lowConf_ethnicity_df.low_confidence_ethnicity,
       sample_celltype_count.\".aggregated_cells\",
       COALESCE(imputed_ethnicity_df.imputed_ethnicity, cell_metadata.self_reported_ethnicity) AS imputed_ethnicity, -- Use imputed_ethnicity if present
-      'cellxgene_2024/0.1.0' AS atlas_id
+      'cellxgene_2024/0.2.0' AS atlas_id
       
     FROM cell_metadata
     
@@ -259,7 +257,7 @@ job::job({
     
     
 
-  ) TO '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.1.0.parquet'
+  ) TO '/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet'
   (FORMAT PARQUET, COMPRESSION 'zstd');
   "
   
@@ -275,7 +273,7 @@ job::job({
 })
 
 x = tbl(dbConnect(duckdb::duckdb(), dbdir = ":memory:"),  
-        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.1.0.parquet')") ) # MODIFY HERE: input metadata parquet path
+        sql("SELECT * FROM read_parquet('/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet')") ) # MODIFY HERE: input metadata parquet path
 
 # Split cell_metadata to cellnexus_metadata, original census_metadata, and metacell_metadata (host Rshiny on smaller file)
 # ---- Split: read metadata.x.y.z.parquet once, write smaller derivative Parquets ----
@@ -285,7 +283,7 @@ job::job({
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
-  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.1.0.parquet" # MODIFY HERE: input metadata parquet path
+  input_metadata <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet" # MODIFY HERE: input metadata parquet path
   out_dir <- "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan"
   
   DBI::dbExecute(
@@ -328,7 +326,7 @@ job::job({
         SELECT {DBI::SQL(select_cellnexus)}
         FROM metadata
       )
-      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.2.1.0.parquet'))}
+      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.2.2.0.parquet'))}
       (FORMAT PARQUET, COMPRESSION 'brotli');
       "
     )
@@ -356,7 +354,7 @@ job::job({
       SELECT {DBI::SQL(select_census)}
       FROM metadata
     )
-    TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.2.1.0.parquet'))}
+    TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.2.2.0.parquet'))}
     (FORMAT PARQUET, COMPRESSION 'brotli');
     "
     )
@@ -376,7 +374,7 @@ job::job({
       SELECT {DBI::SQL(select_metacell)}
       FROM metadata
     )
-    TO {DBI::dbQuoteString(con, file.path(out_dir, 'metacell_metadata.2.1.0.parquet'))}
+    TO {DBI::dbQuoteString(con, file.path(out_dir, 'metacell_metadata.2.2.0.parquet'))}
     (FORMAT PARQUET, COMPRESSION 'brotli');
     "
     )
@@ -386,6 +384,6 @@ job::job({
 })
 
 
-# # Check whether cellnexus_metadata parquet can be optimised further
+# (Optional) Check whether cellnexus_metadata parquet can be optimised further
 # source("~/git_control/cellNexus/dev/data_optimisation_script.R")
 

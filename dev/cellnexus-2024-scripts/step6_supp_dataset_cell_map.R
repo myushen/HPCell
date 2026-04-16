@@ -16,7 +16,6 @@ tar_script({
     retrieval = "worker", 
     error = "continue", 
     cue = tar_cue(mode = "never"),
-    #debug = "dataset_id_sce", 
     
     workspace_on_error = TRUE,
     controller = crew_controller_group(
@@ -28,14 +27,12 @@ tar_script({
           seconds_idle = 30,
           crashes_error = 10,
           options_cluster = crew_options_slurm(
-            #memory_gigabytes_required = c(10, 20, 40, 80, 160),
             memory_gigabytes_required = c(25, 35, 40, 80, 160),
             cpus_per_task = c(2, 2, 5, 10, 20),
             time_minutes = c(30, 30, 30, 60*4, 60*24),
             verbose = T
           )
         )
-        #crew_controller_local(workers = 8)
       )
     ), 
     trust_object_timestamps = TRUE
@@ -61,7 +58,7 @@ tar_script({
   }
   
   list(
-    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_2_2_mengyuan.parquet",
+    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_4_0_mengyuan.parquet",
                deployment = "main"),
     tar_target(
       unique_file_ids,
@@ -95,13 +92,13 @@ job::job({
   tar_make(
     script = paste0(store, "_target_script.R"), 
     store = store, 
-    reporter = "summary" #, callr_function = NULL
+    reporter = "summary"
   )
   
 })
 
 file_id_cell_id_dict = tar_read(file_id_cell_id_dict, store = store)
-file_id_cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_0_0_Jul_2024.parquet",
+file_id_cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_1_0_Jul_2024.parquet",
                                      compression = "zstd")
 rm(file_id_cell_id_dict)
 gc()
