@@ -1,5 +1,5 @@
 library(targets)
-store = "/vast/scratch/users/shen.m/cellnexus_dataset_cell_map_Jul_2024_v1_2_0_target_store"
+store = "/vast/scratch/users/shen.m/cellnexus_dataset_cell_map_Jul_2024_v1_2_1_target_store"
 tar_script({
   library(dplyr)
   library(magrittr)
@@ -58,7 +58,7 @@ tar_script({
   }
   
   list(
-    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_4_0_mengyuan.parquet",
+    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_5_0_mengyuan.parquet",
                deployment = "main"),
     tar_target(
       unique_file_ids,
@@ -68,7 +68,7 @@ tar_script({
       get_unique_file_ids(cell_metadata) 
       # |> head(2)
       ,
-      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
+      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
       # resources = tar_resources(
       #   crew = tar_resources_crew(controller = "elastic")
       # )
@@ -77,7 +77,7 @@ tar_script({
       file_id_cell_id_dict,
       create_file_id_cell_id_dict(cell_metadata, unique_file_ids),
       pattern = map(unique_file_ids),
-      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "HPCell", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
+      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
       # resources = tar_resources(
       #   crew = tar_resources_crew(controller = "elastic")
       # )
@@ -98,7 +98,7 @@ job::job({
 })
 
 file_id_cell_id_dict = tar_read(file_id_cell_id_dict, store = store)
-file_id_cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_1_0_Jul_2024.parquet",
+file_id_cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_1_1_Jul_2024.parquet",
                                      compression = "zstd")
 rm(file_id_cell_id_dict)
 gc()

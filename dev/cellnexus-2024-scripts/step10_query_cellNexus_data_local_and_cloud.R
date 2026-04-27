@@ -1,4 +1,4 @@
-# This scripts test cellNexus API with new data generated in ~/git_control/cellNexus/dev/STEP_7_unify_cell_metadata.R
+# This scripts test cellNexus API with new data generated in STEP_7_unify_cell_metadata.R
 library(dplyr)
 library(cellNexus)
 library(stringr)
@@ -6,7 +6,7 @@ library(zellkonverter)
 
 cache = "~/scratch/cache_temp"
 
-x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.0.parquet")
+x = get_metadata(cache_directory = cache, cloud_metadata = NULL, local_metadata = "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/metadata.2.2.1.parquet")
 x = x |>
   keep_quality_cells()
 x = x |> dplyr::filter(

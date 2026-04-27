@@ -411,7 +411,7 @@ cluster_metacell <- function(input_hpc, target_input = "data_object",
                              target_output = "metacell_tbl", target_empry_droplets = "empty_tbl",
                              target_alive = "alive_tbl", target_doublet = "doublet_tbl",
                              group_by = NULL, 
-                             cell_per_metacell = 30,
+                             cell_per_metacell = 1,
                              ...) {
   UseMethod("cluster_metacell")
 }
@@ -422,7 +422,7 @@ cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object",
                                    target_output = "metacell_tbl",  target_empry_droplets = "empty_tbl",
                                    target_alive = "alive_tbl", target_doublet = "doublet_tbl",
                                    group_by = NULL, 
-                                   cell_per_metacell = 30,
+                                   cell_per_metacell = 1,
                                    ...) {
   
   input_hpc |> 
@@ -435,7 +435,7 @@ cluster_metacell.HPCell = function(input_hpc,  target_input = "data_object",
       alive_identification_tbl = target_alive |> is_target(),
       doublet_identification_tbl = target_doublet |> is_target(),
       x = group_by,
-      min_cells_per_metacell = cell_per_metacell,
+      min_cells_per_metacell = 1,
       ...
     )
 }

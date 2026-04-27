@@ -116,8 +116,9 @@ sliced_sample_tbl = sliced_sample_tbl |> left_join(sample_summary_df |> mutate(s
   mutate(method_to_apply = case_when(is.na(method_to_apply.y) ~ method_to_apply.x,
                                      !is.na(method_to_apply.y) ~ method_to_apply.y))
 
-sliced_sample_tbl <- saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.rds") # MODIFY HERE: output path for sliced_sample_tbl RDS
 
+#sliced_sample_tbl |> write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.parquet")
+sliced_sample_tbl <- read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.parquet")  # MODIFY HERE: output path for sliced_sample_tbl RDS
 
 # Enable sample_names.rds to store sample names for the input
 sample_names <-
@@ -159,8 +160,8 @@ job::job({
         
       ),
       verbosity = "summary",
-      #update = "never", 
-      update = "thorough", 
+      update = "never", 
+      #update = "thorough", 
       error = "continue",
       garbage_collection = 100, 
       workspace_on_error = TRUE
@@ -190,16 +191,16 @@ job::job({
       "subsets_Mito_percent",
       "subsets_Ribo_percent")) |> 
     
-    # Pseudobulk
-    calculate_pseudobulk(target_input = "sce_transformed",
-                         group_by = "cell_type_unified_ensemble") |>
+    # # Pseudobulk
+    # calculate_pseudobulk(target_input = "sce_transformed",
+    #                      group_by = "cell_type_unified_ensemble") |>
 
     # metacell
     cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
 
-    # Cell Chat
-    ligand_receptor_cellchat(target_input = "sce_transformed",
-                             group_by = "cell_type_unified_ensemble") |>
+    # # Cell Chat
+    # ligand_receptor_cellchat(target_input = "sce_transformed",
+    #                          group_by = "cell_type_unified_ensemble") |>
     
     print()
   

@@ -370,6 +370,7 @@ annotation_label_transfer <- function(input_read_RNA_assay,
     colnames(input_read_RNA_assay)[2]= "dummy___"
   }
   
+  #snapshotDate(): 2025-10-29
   blueprint <- celldex::BlueprintEncodeData(
     ensembl = feature_nomenclature == "ensembl"
     #legacy = TRUE
@@ -405,6 +406,7 @@ annotation_label_transfer <- function(input_read_RNA_assay,
   rm(blueprint)
   gc()
   
+  #snapshotDate(): 2025-10-29
   MonacoImmuneData <- celldex::MonacoImmuneData(
     ensembl = feature_nomenclature == "ensembl"
     #legacy = TRUE
@@ -1210,7 +1212,7 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
     RunPCA(npcs = min(50, ncol(input_read_RNA_assay) - 1), verbose = F) |> 
     RunUMAP(reduction = "pca", dims = c(1:min(30, ncol(input_read_RNA_assay) - 1)), 
             n.neighbors = min(30, ncol(input_read_RNA_assay) - 1), verbose = F) |> 
-    Seurat::GetAssayData(slot = "data")
+    Seurat::GetAssayData(layer = "data")
   
   N.c <- ncol(normalized_rna)
   
