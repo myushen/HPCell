@@ -896,16 +896,16 @@ tar_script({
       )
     ),
     
-    # # This target was run for retrieving missing cells analysis only
-    # tar_target(
-    #   missing_cells_tbl,
-    #   cbind_sce_by_dataset_id_get_missing_cells(dataset_id_sce),
-    #   pattern = map(dataset_id_sce),
-    #   packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb",  "BiocParallel", "parallelly", "purrr"),
-    #   resources = tar_resources(
-    #     crew = tar_resources_crew(controller = "elastic_20")
-    #   )
-    # ),
+    # This target was run for retrieving missing cells analysis only
+    tar_target(
+      missing_cells_tbl,
+      cbind_sce_by_dataset_id_get_missing_cells(dataset_id_sce),
+      pattern = map(dataset_id_sce),
+      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb",  "BiocParallel", "parallelly", "purrr"),
+      resources = tar_resources(
+        crew = tar_resources_crew(controller = "elastic_20")
+      )
+    ),
     
     
     tar_target(
