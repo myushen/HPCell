@@ -3,6 +3,8 @@ library(tidyverse)
 data(HCAO_celltype_unification_maps)
 data(HCAO_graph)
 
+source("~/git_control/HPCell/R/functions_consensus.R")
+
 # load cellNexus metadata and only keep high quality cells
 ### This will download ~1GB of data
 cellNexus_metadata = cellNexus::get_metadata() |> 
@@ -44,18 +46,18 @@ df_map = df_map |>
       reference_overide = macrophage_exception)
   )|>
   mutate(
-    cell_type_unified_ensemble = ensemble_annotation2(
+    cell_type_unified_ensemble_HCAO = ensemble_annotation2(
       cbind(data_driven_ensemble, cellxgene),
       local_conservative_node_index = c(1),
       celltype_tree = HCAO_graph,
       reference_overide = mast_and_nkt_exception)
   )|>
   mutate(
-    cell_type_unified_ensemble = case_when(
-      cell_type_unified_ensemble == "not hematopoietic" & cellxgene != "not hematopoietic" ~ "other",
-      .default = cell_type_unified_ensemble
+    cell_type_unified_ensemble_HCAO = case_when(
+      cell_type_unified_ensemble_HCAO == "not hematopoietic" & cellxgene != "not hematopoietic" ~ "other",
+      .default = cell_type_unified_ensemble_HCAO
     ),
-    is_immune = ! cell_type_unified_ensemble %in% c("not hematopoietic","other")
+    is_immune_HCAO = ! cell_type_unified_ensemble_HCAO %in% c("not hematopoietic","other")
   )
 
 # use map to perform cell type ensemble
