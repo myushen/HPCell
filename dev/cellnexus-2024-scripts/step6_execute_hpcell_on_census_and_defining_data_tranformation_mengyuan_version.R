@@ -6,7 +6,6 @@ library(purrr)
 library(stringr)
 library(HPCell)
 library(arrow)
-library(CuratedAtlasQueryR)
 library(targets)
 library(crew)
 library(crew.cluster)
@@ -17,78 +16,43 @@ downloaded_samples_tbl <- read_parquet("/vast/projects/cellxgene_curated/metadat
 downloaded_samples_tbl <- downloaded_samples_tbl |>
   dplyr::rename(cell_number = list_length) |>
   mutate(cell_number = cell_number |> as.integer(),
-         file_name = glue("{directory}{sample_2}.h5ad") |> as.character(),
-         tier = case_when(
-           cell_number < 500 ~ "tier_1", cell_number >= 500 &
-             cell_number < 1000 ~ "tier_2", cell_number >= 1000 &
-             cell_number < 10000 ~ "tier_3", cell_number >= 10000 ~ "tier_4"
-         ))
+         file_name = glue("{directory}{sample_2}.h5ad") |> as.character())
 
-result_directory = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Apr_2024" # MODIFY HERE: directory containing the pre-existing targets store for sample_meta
-
-sample_meta <- tar_read(metadata_dataset_id_common_sample_columns, store = glue("{result_directory}/_targets"))
-sample_tbl = downloaded_samples_tbl |> left_join(CuratedAtlasQueryR::get_metadata(cache_directory = tempdir()) |> dplyr::select(dataset_id, contains("norm")) |>
-                                                   distinct() |> dplyr::filter(!is.na(x_normalization)) |>
-                                                   as_tibble(), by = "dataset_id")
-
-sample_tbl <- sample_tbl |> left_join(sample_meta, by = "dataset_id") |> distinct(file_name, tier, cell_number, dataset_id, sample_2,
-                                                                                  x_normalization, x_approximate_distribution) |>
-  mutate(transform_method = case_when(str_like(x_normalization, "C%") ~ "log",
-                                      x_normalization == "none" ~ "log",
-                                      x_normalization == "normalized" ~ "log",
-                                      is.na(x_normalization) & is.na(x_approximate_distribution) ~ "log",
-                                      is.na(x_normalization) & x_approximate_distribution == "NORMAL" ~ "NORMAL",
-                                      is.na(x_normalization) & x_approximate_distribution == "COUNT" ~ "COUNT",
-                                      str_like(x_normalization, "%canpy%") ~ "log1p",
-                                      TRUE ~ x_normalization)) |>
+# result_directory = "/vast/projects/cellxgene_curated/metadata_cellxgenedp_Apr_2024" # MODIFY HERE: directory containing the pre-existing targets store for sample_meta
+# 
+# sample_meta <- tar_read(metadata_dataset_id_common_sample_columns, store = glue("{result_directory}/_targets"))
+sample_tbl = downloaded_samples_tbl |>
+  filter(!dataset_id %in% c("99950e99-2758-41d2-b2c9-643edcdf6d82", "9fcb0b73-c734-40a5-be9c-ace7eea401c9" )) |>
+  left_join(
+    cellxgenedp::datasets() |>
+      select(dataset_id, x_approximate_distribution) |>
+      distinct(), by = "dataset_id", copy = TRUE) |>
+  mutate(cell_number = cell_number |> as.integer(),
+         file_name = glue("{directory}{sample_2}.h5ad") |> as.character()) |> 
   
-  mutate(method_to_apply =  case_when(transform_method %in% c("log","LogNormalization","LogNormalize","log-normalization") ~ "exp",
-                                      is.na(x_normalization) & is.na(x_approximate_distribution) ~ "exp",
-                                      str_like(transform_method, "Counts%") ~ "exp",
-                                      str_like(transform_method, "%log2%") ~ "exp",
-                                      transform_method %in% c("log1p", "log1p, base e", "Scanpy",
-                                                              "scanpy.api.pp.normalize_per_cell method, scaling factor 10000") ~ "expm1",
-                                      transform_method == "log1p, base 2" ~ "expm1",
-                                      transform_method == "NORMAL" ~ "exp",
-                                      transform_method == "COUNT" ~ "identity",
-                                      is.na(transform_method) ~ "identity"
-  ) ) |>
-  mutate(comment = case_when(str_like(x_normalization, "Counts%")  ~ "a checkpoint for max value of Assay must <= 50",
-                             is.na(x_normalization) & is.na(x_approximate_distribution) ~ "round negative value to 0",
-                             x_normalization == "normalized" ~ "round negative value to 0"
-  ))
-
-
-# Append assay column
-sample_tbl = sample_tbl |> left_join(cellNexus::get_metadata(cache_directory = "/vast/scratch/users/shen.m/cellNexus") |> # MODIFY HERE: cellNexus local cache directory
-                                       distinct(sample_id, assay) , 
-                                     by = c("sample_2" = "sample_id"), 
-                                     copy = T)
-
-
-sample_tbl = sample_tbl |> mutate(count_upper_bound = 20,
-                                  # base our filtering on % of expressed genes for panel technologies 500/20K = x/462
-                                  feature_thresh = ifelse(assay == "BD Rhapsody Targeted mRNA", 11, 200))
-
-sample_tbl <- saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sample_tbl_2024_Jul.rds") # MODIFY HERE: output path for sample_tbl RDS
-
-sliced_sample_tbl = 
-  sample_tbl |> 
-  filter(!dataset_id %in% c("99950e99-2758-41d2-b2c9-643edcdf6d82", "9fcb0b73-c734-40a5-be9c-ace7eea401c9" )) |> 
-  dplyr::select(file_name, tier, cell_number, dataset_id, sample_2, method_to_apply, assay, count_upper_bound, feature_thresh)
-
+  left_join(
+    cellNexus::get_metadata(cache_directory = "/vast/scratch/users/shen.m/cellNexus") |> # MODIFY HERE: cellNexus local cache directory
+      cellNexus::join_census_table() |>
+      distinct(sample_id, assay) ,
+    by = c("sample_2" = "sample_id"),
+    copy = T
+  ) |>
+  # Propositional set up expressed genes threshold for panel technologies 500/20K = x/462
+  mutate(feature_thresh = ifelse(assay == "BD Rhapsody Targeted mRNA", 11, 200))
+  
 # Manually updated 300 samples transformation profiles
-sample_summary_df = tar_read(sample_summary_df, store = "/vast/scratch/users/shen.m/sct_failed_samples_raw_counts_summary_target_store/_targets/") |> # MODIFY HERE: targets store for manually reviewed SCT-failed samples
+sample_summary_df = tar_read(sample_summary_df, store = "/vast/scratch/users/shen.m/2024-07-01_census_sample_raw_counts_summary_target_store/_targets") |> # MODIFY HERE: targets store for manually reviewed SCT-failed samples
   bind_rows() |>
-  mutate(max_gt_20 = ifelse(max_val > 20, TRUE, FALSE)) |> 
-  mutate(sample_id = str_remove(sample_id, ".h5ad"))
+  mutate(max_gt_20 = ifelse(max_val > 20, TRUE, FALSE))
 
 impute_x_approximate_distribution <- function(df) {
   df |> mutate(
     inferred_distribution = case_when(
+      # 0) When counts gap between 0 and next min value >= 0.25, double log
+      !has_negative & !max_gt_20 & !all_integer & !has_floating & (counts_gap >= 0.25) ~ "double_log1p"  ,
       
       # 1) No negatives, no large values, no integers, no floating
-      !has_negative & !max_gt_20 & !all_integer & !has_floating ~ "log1p",
+      !has_negative & !max_gt_20 & !all_integer & !has_floating & (counts_gap < 0.25) ~ "log1p",
       
       # 2) No negatives, has large values
       !has_negative &  max_gt_20 & !all_integer & !has_floating  ~ "raw",
@@ -96,7 +60,7 @@ impute_x_approximate_distribution <- function(df) {
       # 3) No negatives, large values, all integer, has floating
       !has_negative &  max_gt_20 & all_integer & !has_floating ~ "raw",
       
-      # 4) Has negatives, no large values, no integer, no floating
+      # 4) Has negatives, no large values, no integer, no floating. Counts peak at 10
       has_negative & !max_gt_20 & !all_integer & !has_floating ~ "raw",
       
       # 5) Has negatives and large values
@@ -106,30 +70,97 @@ impute_x_approximate_distribution <- function(df) {
 } 
 
 sample_summary_df = sample_summary_df |> impute_x_approximate_distribution() |> 
+  mutate(count_upper_bound = case_when(
+    # 0) When counts gap between 0 and next min value >= 0.25, double log. Max value before exp is 10.
+    inferred_distribution == "double_log1p" ~ 10,
+    
+    # 4) Has negatives, no large values, no integer, no floating. Counts peak at 10
+    has_negative & !max_gt_20 & !all_integer & !has_floating ~ 10,
+    
+    TRUE ~ 20
+  )) |>
   # Inverse distribution
-  mutate(method_to_apply = case_when(inferred_distribution == "log" ~ "exp",
+  mutate(method_to_apply = case_when(inferred_distribution == "double_log1p" ~ "safe_expm1",
                                      inferred_distribution == "log1p" ~ "expm1",
                                      inferred_distribution == "raw" ~ "identity"))
 
-sliced_sample_tbl = sliced_sample_tbl |> left_join(sample_summary_df |> mutate(sample_id = str_remove(sample_id, ".h5ad")) |>
-                                                     select(sample_id, method_to_apply), by = c("sample_2" =  "sample_id")) |>
-  mutate(method_to_apply = case_when(is.na(method_to_apply.y) ~ method_to_apply.x,
-                                     !is.na(method_to_apply.y) ~ method_to_apply.y))
+sample_tbl = sample_tbl |> left_join(sample_summary_df |>
+                                       select(sample_2,
+                                              method_to_apply,
+                                              dataset_id,
+                                              count_upper_bound),
+                                     by = c("sample_2", "dataset_id"))
+
+sample_tbl = sample_tbl |>
+  
+  select(file_name, cell_number, dataset_id, sample_2, method_to_apply, assay, count_upper_bound, feature_thresh)
+
+sample_tbl |> saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/updated_transform_sample_tbl_2024_Jul.rds") # MODIFY HERE: output path for sample_tbl RDS
+  
+#   # 
+#   # left_join(sample_meta, by = "dataset_id") |> distinct(file_name, tier, cell_number, dataset_id, sample_2,
+#   #                                                                                 x_normalization, x_approximate_distribution) |>
+#   mutate(transform_method = case_when(str_like(x_normalization, "C%") ~ "log",
+#                                       x_normalization == "none" ~ "log",
+#                                       x_normalization == "normalized" ~ "log",
+#                                       is.na(x_normalization) & is.na(x_approximate_distribution) ~ "log",
+#                                       is.na(x_normalization) & x_approximate_distribution == "NORMAL" ~ "NORMAL",
+#                                       is.na(x_normalization) & x_approximate_distribution == "COUNT" ~ "COUNT",
+#                                       str_like(x_normalization, "%canpy%") ~ "log1p",
+#                                       TRUE ~ x_normalization)) |>
+#   
+#   mutate(method_to_apply =  case_when(transform_method %in% c("log","LogNormalization","LogNormalize","log-normalization") ~ "exp",
+#                                       is.na(x_normalization) & is.na(x_approximate_distribution) ~ "exp",
+#                                       str_like(transform_method, "Counts%") ~ "exp",
+#                                       str_like(transform_method, "%log2%") ~ "exp",
+#                                       transform_method %in% c("log1p", "log1p, base e", "Scanpy",
+#                                                               "scanpy.api.pp.normalize_per_cell method, scaling factor 10000") ~ "expm1",
+#                                       transform_method == "log1p, base 2" ~ "expm1",
+#                                       transform_method == "NORMAL" ~ "exp",
+#                                       transform_method == "COUNT" ~ "identity",
+#                                       is.na(transform_method) ~ "identity"
+#   ) ) |>
+#   mutate(comment = case_when(str_like(x_normalization, "Counts%")  ~ "a checkpoint for max value of Assay must <= 50",
+#                              is.na(x_normalization) & is.na(x_approximate_distribution) ~ "round negative value to 0",
+#                              x_normalization == "normalized" ~ "round negative value to 0"
+#   ))
+# 
+# 
+# # Append assay column
+# sample_tbl = sample_tbl |> left_join(cellNexus::get_metadata(cache_directory = "/vast/scratch/users/shen.m/cellNexus") |> # MODIFY HERE: cellNexus local cache directory
+#                                        distinct(sample_id, assay) , 
+#                                      by = c("sample_2" = "sample_id"), 
+#                                      copy = T)
+# 
+# 
+# sample_tbl = sample_tbl |> mutate(count_upper_bound = 20,
+#                                   # base our filtering on % of expressed genes for panel technologies 500/20K = x/462
+#                                   feature_thresh = ifelse(assay == "BD Rhapsody Targeted mRNA", 11, 200))
+# 
+# sample_tbl <- saveRDS("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sample_tbl_2024_Jul.rds") # MODIFY HERE: output path for sample_tbl RDS
+# 
+# sliced_sample_tbl = 
+#   sample_tbl |> 
+#   filter(!dataset_id %in% c("99950e99-2758-41d2-b2c9-643edcdf6d82", "9fcb0b73-c734-40a5-be9c-ace7eea401c9" )) |> 
+#   dplyr::select(file_name, tier, cell_number, dataset_id, sample_2, method_to_apply, assay, count_upper_bound, feature_thresh)
 
 
-#sliced_sample_tbl |> write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.parquet")
-sliced_sample_tbl <- read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.parquet")  # MODIFY HERE: output path for sliced_sample_tbl RDS
+
+
+# #sliced_sample_tbl |> write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.parquet")
+# sliced_sample_tbl <- read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/sliced_sample_tbl_2024_Jul.parquet")  # MODIFY HERE: output path for sliced_sample_tbl RDS
 
 # Enable sample_names.rds to store sample names for the input
 sample_names <-
-  sliced_sample_tbl |> 
+  sample_tbl |> 
   pull(file_name) |> 
-  str_replace("/home/users/allstaff/shen.m/scratch", "/vast/scratch/users/shen.m") |> 
-  set_names(sliced_sample_tbl |> pull(sample_2))
-functions = sliced_sample_tbl |> pull(method_to_apply)
-feature_thresh = sliced_sample_tbl |> pull(feature_thresh)
+  set_names(sample_tbl |> pull(sample_2))
+functions = sample_tbl |> pull(method_to_apply)
+feature_thresh = sample_tbl |> pull(feature_thresh)
+count_upper_bound = sample_tbl |> pull(count_upper_bound)
 
-my_store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_samples_hpcell_target_store" # MODIFY HERE: HPCell targets store (used throughout this script)
+
+my_store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_updated_samples_transform_hpcell_target_store" # MODIFY HERE: HPCell targets store (used throughout this script)
 job::job({
   
   library(HPCell)
@@ -167,7 +198,7 @@ job::job({
       workspace_on_error = TRUE
       
     ) |> 
-    transform_assay(fx = functions, target_output = "sce_transformed") |>
+    transform_assay(fx = functions, target_output = "sce_transformed", scale_max = count_upper_bound) |>
     
     # # Remove empty outliers based on RNA count threshold per cell
     remove_empty_threshold(target_input = "sce_transformed", RNA_feature_threshold = feature_thresh) |>
@@ -186,17 +217,17 @@ job::job({
     # Doublets identification
     remove_doublets_scDblFinder(target_input = "sce_transformed") |>
     
-    # SCT 
-    normalise_abundance_seurat_SCT(target_input = "sce_transformed", factors_to_regress = c(
-      "subsets_Mito_percent",
-      "subsets_Ribo_percent")) |> 
+    # # SCT 
+    # normalise_abundance_seurat_SCT(target_input = "sce_transformed", factors_to_regress = c(
+    #   "subsets_Mito_percent",
+    #   "subsets_Ribo_percent")) |> 
     
     # # Pseudobulk
     # calculate_pseudobulk(target_input = "sce_transformed",
     #                      group_by = "cell_type_unified_ensemble") |>
 
-    # metacell
-    cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
+    # # metacell
+    # cluster_metacell(target_input = "sce_transformed",  group_by = "cell_type_unified_ensemble") |>
 
     # # Cell Chat
     # ligand_receptor_cellchat(target_input = "sce_transformed",

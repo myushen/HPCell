@@ -3,7 +3,7 @@
 transform_assay <- function(input_hpc, fx = input_hpc$initialisation$input_hpc |> map(~identity), 
                             target_input = "data_object", target_output = "sce_transformed", 
                             # make every element to be 20 as a placeholder unless further indicate
-                            scale_max = input_hpc$initialisation$input_hpc |> map(~20), ...) {
+                            scale_max = input_hpc$initialisation$input_hpc |> map(~10), ...) {
   UseMethod("transform_assay")
 }
 
@@ -17,7 +17,7 @@ transform_assay.HPCell = function(
     fx = input_hpc$initialisation$input_hpc |> map(~"identity"), 
     target_input = "data_object", 
     target_output = "sce_transformed", 
-    scale_max = input_hpc$initialisation$input_hpc |> map(~20),
+    scale_max = input_hpc$initialisation$input_hpc |> map(~10),
     ...
 ) {
   
@@ -56,6 +56,71 @@ transform_assay.HPCell = function(
       
     )
   
+}
+
+#' Limit Maximum Value of Counts by Scaling
+#'
+#' Scales a numeric vector down so that its maximum value does not exceed
+#' \code{scale_max}. If the maximum of \code{counts} is already within the
+#' limit, the vector is returned unchanged.
+#'
+#' @param counts A numeric vector of count values to be scaled.
+#' @param scale_max A numeric scalar specifying the upper bound for the maximum
+#'   value of \code{counts}.
+#'
+#' @return A numeric vector of the same length as \code{counts}, with all
+#'   values scaled so that the maximum does not exceed \code{scale_max}.
+#' @export
+limit_max_to_scale <- function(counts, scale_max) {
+  if (max(counts) > scale_max) {
+    scale_factor <- scale_max / max(counts)
+    counts <- counts * scale_factor
+  }
+  counts
+}
+
+#' Safe Exponential Minus One Transformation
+#'
+#' Applies a two-stage \code{\link[base]{expm1}} transformation to a numeric
+#' vector with scaling applied before each stage to prevent overflow. Prior to
+#' each call to \code{expm1()}, \code{\link{limit_max_to_scale}} is used to
+#' ensure the maximum value does not exceed \code{scale_max}, making the
+#' transformation numerically stable for large count values.
+#'
+#' The transformation pipeline is:
+#' \deqn{counts \rightarrow \text{scale} \rightarrow expm1 \rightarrow \text{scale} \rightarrow expm1}
+#'
+#' @param counts A numeric vector of count values to be transformed.
+#' @param scale_max A numeric scalar passed to \code{\link{limit_max_to_scale}}
+#'   specifying the upper bound applied before each \code{expm1} step.
+#'
+#' @return A numeric vector of the same length as \code{counts} with the
+#'   two-stage \code{expm1} transformation applied.
+#' @seealso \code{\link{expm1}}, \code{\link{limit_max_to_scale}}
+#' @export
+safe_expm1 <- function(counts, scale_max) {
+  counts <- counts |> limit_max_to_scale(scale_max) |> expm1() |> limit_max_to_scale(scale_max) |> expm1()
+  counts
+}
+
+#' Identity Transformation with Maximum Value Scaling
+#'
+#' Scales a numeric vector so that its maximum does not exceed \code{scale_max}
+#' before returning it unchanged via \code{\link[base]{identity}}. This is
+#' useful when no mathematical transformation is desired but the counts still
+#' need to be bounded for downstream stability.
+#'
+#' @param counts A numeric vector of count values to be scaled.
+#' @param scale_max A numeric scalar specifying the upper bound for the maximum
+#'   value of \code{counts}. Passed directly to \code{\link{limit_max_to_scale}}.
+#'
+#' @return A numeric vector of the same length as \code{counts}, with all
+#'   values scaled so that the maximum does not exceed \code{scale_max}.
+#' @seealso \code{\link{limit_max_to_scale}}, \code{\link{safe_expm1}}
+#' @export
+identity_with_max_limit <- function(counts, scale_max) {
+  counts <- counts |> limit_max_to_scale(scale_max) |> identity()
+  counts
 }
 
 #' Apply a transformation to an assay and save as HDF5
@@ -110,29 +175,33 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   
   dir.create(external_path, showWarnings = FALSE, recursive = TRUE)
   
-  # Convert transform_method to a function if it is a character string
-  transform_function <- match.fun(transform_fx)
-  
   # Get the name of the first assay in the data object
   assay_name <- names(assays(input_read_RNA_assay))[1]
   
   # Extract the counts matrix from the assay
   counts <- assay(input_read_RNA_assay, assay_name)
   
+  # Convert transform_method to a function if it is a character string
+  transform_function <- match.fun(transform_fx)
+  
   # Scale counts to a maximum of 20 to avoid downstream failures.  
   # This Check needs ~13Gb to run for 5000+ cell datasets
-  # Check if the transformation method is not 'identity' and counts exceed 20
-  if (!identical(transform_function, identity) ) {
-    if(max(counts) > scale_max){
-      scale_factor <- scale_max / max(counts)
-      counts <- counts * scale_factor
-    }}
+  # Check if the transformation method is not 'identity' and counts exceed counts upper bound
+  # Scale for other transform function is handled internally in `transform_function`
+  if (identical(transform_function, identity) || identical(transform_function, expm1)) {
+    # For identity: no scaling needed
+    # For expm1: pre-scale first, then apply
+    if (identical(transform_function, expm1)) {
+      counts <- limit_max_to_scale(counts, scale_max)
+    }
+    counts <- transform_function(counts)
+  } else {
+    # identity_with_max_limit and safe_expm1 handle scale_max internally
+    counts <- transform_function(counts, scale_max)
+  }
   
   # Clear memory
   gc()
-  
-  # Apply the transformation method to counts
-  counts <- transform_function(counts)
   
   # This is to avoid memory explosion
   set.seed(42)
