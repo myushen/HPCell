@@ -11,7 +11,6 @@ library(crew)
 library(crew.cluster)
 library(duckdb)
 directory = "/vast/scratch/users/shen.m/Census/split_h5ad_based_on_sample_id/2024-07-01/" # MODIFY HERE: directory containing per-sample h5ad files
-sample_anndata <- dir(glue("{directory}"), full.names = T)
 downloaded_samples_tbl <- read_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/census_samples_to_download_groups_MODIFIED.parquet") # MODIFY HERE: input samples metadata parquet
 downloaded_samples_tbl <- downloaded_samples_tbl |>
   dplyr::rename(cell_number = list_length) |>
@@ -61,7 +60,7 @@ impute_x_approximate_distribution <- function(df) {
       !has_negative &  max_gt_20 & all_integer & !has_floating ~ "raw",
       
       # 4) Has negatives, no large values, no integer, no floating. Counts peak at 10
-      has_negative & !max_gt_20 & !all_integer & !has_floating ~ "raw",
+      has_negative & !max_gt_20 & !all_integer & !has_floating ~ "raw_limit_max_to_10",
       
       # 5) Has negatives and large values
       has_negative &  max_gt_20 & !all_integer & !has_floating ~ "raw"
@@ -74,15 +73,21 @@ sample_summary_df = sample_summary_df |> impute_x_approximate_distribution() |>
     # 0) When counts gap between 0 and next min value >= 0.25, double log. Max value before exp is 10.
     inferred_distribution == "double_log1p" ~ 10,
     
-    # 4) Has negatives, no large values, no integer, no floating. Counts peak at 10
-    has_negative & !max_gt_20 & !all_integer & !has_floating ~ 10,
+    # 1) make 10 as max before exp
+    inferred_distribution == "log1p" ~ 10,
     
-    TRUE ~ 20
+    # 4) Has negatives, no large values, no integer, no floating. Counts peak at 10
+    inferred_distribution == "raw_limit_max_to_10" ~ 10,
+    
+    # 2,3,5), assign a dummy limit
+    inferred_distribution == "raw" ~ 9999
+     
   )) |>
   # Inverse distribution
   mutate(method_to_apply = case_when(inferred_distribution == "double_log1p" ~ "safe_expm1",
                                      inferred_distribution == "log1p" ~ "expm1",
-                                     inferred_distribution == "raw" ~ "identity"))
+                                     inferred_distribution == "raw" ~ "identity",
+                                     inferred_distribution == "raw_limit_max_to_10" ~ "identity_with_max_limit"))
 
 sample_tbl = sample_tbl |> left_join(sample_summary_df |>
                                        select(sample_2,
@@ -160,7 +165,7 @@ feature_thresh = sample_tbl |> pull(feature_thresh)
 count_upper_bound = sample_tbl |> pull(count_upper_bound)
 
 
-my_store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_updated_samples_transform_hpcell_target_store" # MODIFY HERE: HPCell targets store (used throughout this script)
+my_store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_updated_samples_transform_hpcell_target_store_v1" # MODIFY HERE: HPCell targets store (used throughout this script)
 job::job({
   
   library(HPCell)
@@ -182,9 +187,9 @@ job::job({
            #memory_gigabytes_required = c(20, 35, 50, 75, 100, 150), 
            #memory_gigabytes_required = c(90, 120, 150, 180, 200), 
            #memory_gigabytes_required = c(70, 80, 100, 150, 200), 
-            memory_gigabytes_required = c(45, 60, 75, 100, 120, 150), 
+           memory_gigabytes_required = c(45, 60, 75, 100, 120, 150), 
             cpus_per_task = c(2, 2, 5, 10, 20), 
-            time_minutes = c(60*24, 60*24, 60*24, 60*24, 60*24),
+            time_minutes = c(60*4, 60*4, 60*4, 60*4, 60*4),
             verbose = T
           )
         )
@@ -199,23 +204,23 @@ job::job({
       
     ) |> 
     transform_assay(fx = functions, target_output = "sce_transformed", scale_max = count_upper_bound) |>
-    
-    # # Remove empty outliers based on RNA count threshold per cell
-    remove_empty_threshold(target_input = "sce_transformed", RNA_feature_threshold = feature_thresh) |>
-    
-    # Annotation
-    annotate_cell_type(target_input = "sce_transformed", azimuth_reference = "pbmcref") |> 
-    
-    # Cell type harmonisation
-    celltype_consensus_constructor(target_input = "sce_transformed",
-                                   target_output = "cell_type_concensus_tbl") |>
-    
-    # Alive identification
-    remove_dead_scuttle(target_input = "sce_transformed", target_annotation = "cell_type_concensus_tbl",
-                        group_by = "cell_type_unified_ensemble") |>
-    
-    # Doublets identification
-    remove_doublets_scDblFinder(target_input = "sce_transformed") |>
+  #   
+  #   # # Remove empty outliers based on RNA count threshold per cell
+  #   remove_empty_threshold(target_input = "sce_transformed", RNA_feature_threshold = feature_thresh) |>
+  #   
+  #   # Annotation
+  #   annotate_cell_type(target_input = "sce_transformed", azimuth_reference = "pbmcref") |> 
+  #   
+  #   # Cell type harmonisation
+  #   celltype_consensus_constructor(target_input = "sce_transformed",
+  #                                  target_output = "cell_type_concensus_tbl") |>
+  #   
+  #   # Alive identification
+  #   remove_dead_scuttle(target_input = "sce_transformed", target_annotation = "cell_type_concensus_tbl",
+  #                       group_by = "cell_type_unified_ensemble") |>
+  #   
+  #   # Doublets identification
+  #   remove_doublets_scDblFinder(target_input = "sce_transformed") |>
     
     # # SCT 
     # normalise_abundance_seurat_SCT(target_input = "sce_transformed", factors_to_regress = c(
