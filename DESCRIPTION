@@ -10,7 +10,7 @@ Description: Massively-parallel R native pipeline for single-cell analysis.
 License: GPL-3 
 Roxygen: list(markdown = TRUE)
 Depends: 
-    R (>= 4.2.0)
+    R (>= 4.5.0)
 Remotes: 
     sqjin/CellChat,
     satijalab/seurat@seurat5,
