@@ -11,7 +11,8 @@ remove_dead_scuttle(
   target_output = "alive_tbl",
   target_input = "data_object",
   target_empty_droplets = "empty_tbl",
-  target_annotation = NULL
+  target_annotation = NULL,
+  ...
 )
 
 \method{remove_dead_scuttle}{HPCell}(

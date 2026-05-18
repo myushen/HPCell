@@ -775,8 +775,6 @@ addition = function(a, b){
 #' and compute UMAP (Uniform Manifold Approximation and Projection) embeddings for 
 #' visualization of cell clusters. 
 #'
-#' @noRd
-#' 
 #' @importFrom Seurat RunUMAP
 #' @export
 calc_UMAP <- function(input_seurat) {
@@ -3093,7 +3091,7 @@ computeCommunProbPathway <- function(object = NULL, net = NULL, pairLR.use = NUL
 #' threshold does not exceed the maximum safe size implied by
 #' `.Machine$integer.max` (to avoid 32-bit integer overflow in downstream steps).
 #' @param m A gene-by-cell matrix of counts or expression values. Typically a
-#'   sparse matrix of class \code{\link[Matrix]{dgCMatrix}}.
+#'   sparse matrix of class \code{\linkS4class{dgCMatrix}}.
 #' @param min_cells Integer scalar. Desired starting minimum number of cells in
 #'   which a gene must be detected. 
 #' @param step Integer scalar. Step size used when rounding the computed

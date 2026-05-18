@@ -26,22 +26,18 @@ jobs:
           bioc: devel
           r: auto
           cont: ghcr.io/bioconductor/bioconductor_docker:devel
-          rspm: https://packagemanager.posit.co/cran/__linux__/jammy/latest
+          rspm: ~
         - os: macOS-latest
           bioc: release
           r: auto
           cont: ~
-          rspm: https://packagemanager.posit.co/cran/latest
+          rspm: ~
         - os: windows-latest
           bioc: release
           r: auto
           cont: ~
-          rspm: https://packagemanager.posit.co/cran/latest
+          rspm: ~
     steps:
-    - name: Set CRAN mirror in ~/.Rprofile
-      shell: bash
-      run: |
-        echo 'options(repos = c(CRAN = "https://cloud.r-project.org"))' >> ~/.Rprofile
     - uses: neurogenomics/rworkflows@master
       with:
         run_bioccheck: ${{ false }}

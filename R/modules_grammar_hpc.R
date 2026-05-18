@@ -94,15 +94,6 @@ initialise_hpc <- function(input_hpc,
   
   # Write pipeline to a file
   {
-    library(HPCell)
-    library(dplyr)
-    library(magrittr)
-    library(tibble)
-    library(targets)
-    library(tarchetypes)
-    library(crew)
-    library(crew.cluster)
-    
     tar_option_set(
       memory = "transient",
       garbage_collection = g,
@@ -323,12 +314,13 @@ target_chunk_undefined_remove_empty_threshold = function(input_hpc){
 #' @param ... Additional arguments (unused; for method dispatch).
 #' @return The updated `HPCell` object with the dead-cell removal step appended.
 #' @export
-remove_dead_scuttle <- function(input_hpc, 
-                                group_by = NULL, 
+remove_dead_scuttle <- function(input_hpc,
+                                group_by = NULL,
                                 target_output = "alive_tbl",
-                                target_input = "data_object", 
+                                target_input = "data_object",
                                 target_empty_droplets = "empty_tbl",
-                                target_annotation = NULL) {
+                                target_annotation = NULL,
+                                ...) {
   UseMethod("remove_dead_scuttle")
 }
 
@@ -405,9 +397,9 @@ score_cell_cycle_seurat.HPCell = function(input_hpc, target_input = "data_object
 #' @export
 remove_doublets_scDblFinder <- function(
     input_hpc, target_input = "data_object", target_output = "doublet_tbl",
-    target_empry_droplets = "empty_tbl"
+    target_empry_droplets = "empty_tbl",
     # , target_annotation = "annotation_tbl", reference_label_group_by = "monaco_first.labels.fine"
-  ) {
+    ...) {
   UseMethod("remove_doublets_scDblFinder")
 }
 
@@ -482,7 +474,8 @@ annotate_cell_type.HPCell = function(input_hpc, azimuth_reference = NULL, target
 #' @param ... Additional arguments (unused; for method dispatch).
 #' @return The updated `HPCell` object with the SCTransform step appended.
 #' @export
-normalise_abundance_seurat_SCT <- function(input_hpc, target_input = "data_object", 
+normalise_abundance_seurat_SCT <- function(input_hpc, factors_to_regress = NULL,
+                                           target_input = "data_object",
                                            target_output = "sct_matrix", ...) {
   UseMethod("normalise_abundance_seurat_SCT")
 }
@@ -885,6 +878,7 @@ get_single_cell.HPCell = function(input_hpc, target_input = "data_object", targe
 #'   extended with one or more pipeline step functions.
 #' @return Either the assembled single-cell object (if `get_single_cell()` was
 #'   called) or a `tibble` with targets metadata.
+#' @name evaluate_hpc
 #' @export
 evaluate_hpc <- function(input_hpc) {
   UseMethod("evaluate_hpc")

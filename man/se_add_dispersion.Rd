@@ -12,8 +12,6 @@ se_add_dispersion(se, my_formula, my_assay)
 \item{my_formula}{A formula used to model the design matrix.}
 
 \item{my_assay}{The assay to be used for dispersion estimation.}
-
-\item{se_df}{A data frame containing SingleCellExperiment objects.}
 }
 \value{
 The input data frame with updated SingleCellExperiment objects containing dispersion values.

@@ -14,7 +14,6 @@
 #' a random subset of up to 2000 samples is drawn to reduce computational load.
 #'
 #' @param se A SummarizedExperiment object.
-#' @param se_df A data frame containing SingleCellExperiment objects.
 #' @param my_formula A formula used to model the design matrix.
 #' @param my_assay The assay to be used for dispersion estimation.
 #' @return The input data frame with updated SingleCellExperiment objects containing dispersion values.
@@ -228,7 +227,6 @@ map_de = function(se, my_formula, assay, method, max_rows_for_matrix_multiplicat
 }
 
 #' @importFrom tidybulk test_differential_abundance
-#' @export
 #' @noRd
 internal_de_function = function(x, fi, a, formul, m){
   

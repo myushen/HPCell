@@ -1,5 +1,5 @@
 Package: HPCell
-Title: Massively-parallel R native pipeline for single-cell analysis
+Title: Massively-Parallel R Native Pipeline for Single-Cell Analysis
 Version: 0.4.0
 Authors@R: c(person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
                   role = c("aut", "cre")),
@@ -10,7 +10,7 @@ Description: Massively-parallel R native pipeline for single-cell analysis.
 License: GPL-3 
 Roxygen: list(markdown = TRUE)
 Depends: 
-    R (>= 4.2.0)
+    R (>= 4.5.0)
 Remotes: 
     jinworks/CellChat,
     satijalab/seurat@seurat5,
@@ -73,7 +73,12 @@ Imports:
   CellChat,
   SuperCell,
   irlba,
-  proxy
+  proxy,
+  ensembldb,
+  AnnotationFilter,
+  BiocParallel,
+  cli,
+  rhdf5
 Suggests: 
     testthat (>= 3.0.0), 
     scRNAseq,
@@ -83,7 +88,6 @@ Suggests:
     RColorBrewer,
     circlize,
     cowplot,
-    ensembldb,
     future.apply,
     gridGraphics,
     patchwork,

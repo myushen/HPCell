@@ -486,8 +486,6 @@ annotation_label_transfer <- function(input_read_RNA_assay,
     
   } else if (!is.null(reference_azimuth)) {
     
-    library(Seurat) # !!! If this is not here gives error, but this has to go for Bioconductor
-    
     # Convert SCE to SE to calculate SCT
     if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
       
@@ -1184,7 +1182,7 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
 #' @param approx.N number of cells to subsample for an approximate approach. By default, 5000 cells are used 
 #'   for approximation to capture biological meaningful result.
 #' @param seed seed to use to subsample cells for an approximate approach
-#' @param ... other parameters of \link{build_knn_graph} function
+#' @param ... other parameters of \link[SuperCell]{build_knn_graph} function
 #' @return A list of variables to be passed to the `SuperCell::SCimplify` gamma involved function. 
 #' @importFrom Matrix t
 #' @importFrom stats var prcomp
@@ -1386,7 +1384,7 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
 #' @param igraph.clustering clustering method to identify metacells (available methods "walktrap" (default) and "louvain" (not recommended, gamma is ignored)).
 #' @param return.singlecell.NW whether return single-cell network (which consists of approx.N if \code{"do.approx"} or all cells otherwise)
 #' @param return.hierarchical.structure whether return hierarchical structure of metacell
-#' @param ... other parameters of \link{build_knn_graph} function
+#' @param ... other parameters of \link[SuperCell]{build_knn_graph} function
 #'
 #' @return A tibble with column 'cell' and 'membership' indicating which metacell cluster each cell belongs to.
 #' @importFrom igraph cluster_walktrap cluster_louvain contract simplify E V
@@ -1631,8 +1629,10 @@ calculate_gamma <- function(cell_count, min_cells_per_metacell = 1) {
 #' @importFrom purrr map
 #' @importFrom dplyr rename group_by summarise group_split
 #' @examples
+#' \dontrun{
 #' # Assume 'sce' is a SingleCellExperiment object with a cell type
-#' calculate_metacell(sce)
+#' calculate_metacell_for_a_sample_per_cell_type(sce)
+#' }
 calculate_metacell_for_a_sample_per_cell_type <- function(sample_sce,
                                                           min_cells_per_metacell = 1) {
   # Preprocess the single-cell data
@@ -1887,7 +1887,6 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @param assays Character vector of assay names to include (e.g. `c("RNA", "ADT")`).
 #'   `NULL` uses all assays.
 #' @param container_type Character scalar specifying the output file format.
-#' @param ... Additional arguments passed to internal aggregation functions.
 #'
 #' @return A list containing pseudobulk `SummarizedExperiment` objects aggregated
 #'   by sample and (optionally) by sample × cell type.

@@ -50,8 +50,6 @@ files are stored.}
 \code{NULL} uses all assays.}
 
 \item{container_type}{Character scalar specifying the output file format.}
-
-\item{...}{Additional arguments passed to internal aggregation functions.}
 }
 \value{
 A list containing pseudobulk \code{SummarizedExperiment} objects aggregated

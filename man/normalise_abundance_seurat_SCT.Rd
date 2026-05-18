@@ -7,6 +7,7 @@
 \usage{
 normalise_abundance_seurat_SCT(
   input_hpc,
+  factors_to_regress = NULL,
   target_input = "data_object",
   target_output = "sct_matrix",
   ...
@@ -23,15 +24,15 @@ normalise_abundance_seurat_SCT(
 \arguments{
 \item{input_hpc}{An \code{HPCell} object.}
 
+\item{factors_to_regress}{Character vector of column names in the Seurat
+object metadata to regress out during SCTransform. \code{NULL} applies no
+regression.}
+
 \item{target_input}{Name of the targets target providing the data object.}
 
 \item{target_output}{Name of the targets target to write the SCT matrix to.}
 
 \item{...}{Additional arguments (unused; for method dispatch).}
-
-\item{factors_to_regress}{Character vector of column names in the Seurat
-object metadata to regress out during SCTransform. \code{NULL} applies no
-regression.}
 }
 \value{
 The updated \code{HPCell} object with the SCTransform step appended.
