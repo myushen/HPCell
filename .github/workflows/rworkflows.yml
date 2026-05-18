@@ -26,17 +26,17 @@ jobs:
           bioc: devel
           r: auto
           cont: ghcr.io/bioconductor/bioconductor_docker:devel
-          rspm: ~
+          rspm: https://packagemanager.posit.co/cran/__linux__/jammy/latest
         - os: macOS-latest
           bioc: release
           r: auto
           cont: ~
-          rspm: ~
+          rspm: https://packagemanager.posit.co/cran/latest
         - os: windows-latest
           bioc: release
           r: auto
           cont: ~
-          rspm: ~
+          rspm: https://packagemanager.posit.co/cran/latest
     steps:
     - uses: neurogenomics/rworkflows@master
       with:
