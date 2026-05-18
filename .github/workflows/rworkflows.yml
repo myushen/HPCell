@@ -38,6 +38,10 @@ jobs:
           cont: ~
           rspm: https://packagemanager.posit.co/cran/latest
     steps:
+    - name: Set CRAN mirror in ~/.Rprofile
+      shell: bash
+      run: |
+        echo 'options(repos = c(CRAN = "https://cloud.r-project.org"))' >> ~/.Rprofile
     - uses: neurogenomics/rworkflows@master
       with:
         run_bioccheck: ${{ false }}
