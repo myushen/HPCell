@@ -6,6 +6,7 @@ name: rworkflows
     - main
     - devel
     - RELEASE_**
+    - ci/**
   pull_request:
     branches:
     - master
