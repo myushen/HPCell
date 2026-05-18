@@ -15,7 +15,6 @@ Remotes:
     jinworks/CellChat,
     satijalab/seurat@seurat5,
     satijalab/seurat-data@seurat5,
-    satijalab/azimuth@master,
     mojaveazure/seurat-disk@master,
     GfellerLab/SuperCell
 Biarch: true
