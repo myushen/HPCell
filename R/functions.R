@@ -336,7 +336,6 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
 #' @importFrom magrittr extract2
 #' @importFrom SummarizedExperiment assay
 #' @importFrom SummarizedExperiment assay<-
-#' @importFrom Azimuth RunAzimuth
 #' @importFrom stringr str_detect
 #' @importFrom tidyr nest
 #' @importFrom S4Vectors cbind
@@ -485,7 +484,11 @@ annotation_label_transfer <- function(input_read_RNA_assay,
     #output_path
     
   } else if (!is.null(reference_azimuth)) {
-    
+
+    if (!requireNamespace("Azimuth", quietly = TRUE))
+      stop("Package 'Azimuth' is required for reference-based annotation. ",
+           "Install it with: remotes::install_github('satijalab/azimuth@master')")
+
     # Convert SCE to SE to calculate SCT
     if (inherits(input_read_RNA_assay, "SingleCellExperiment")) {
       
@@ -1187,7 +1190,6 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
 #' @importFrom Matrix t
 #' @importFrom stats var prcomp
 #' @importFrom irlba irlba
-#' @importFrom SuperCell build_knn_graph
 #' @export
 preprocess_SCimplify <- function(input_read_RNA_assay,
                                  assay = NULL,
@@ -1349,6 +1351,10 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
   }
   
   
+  if (!requireNamespace("SuperCell", quietly = TRUE))
+    stop("Package 'SuperCell' is required for metacell computation. ",
+         "Install it with: remotes::install_github('GfellerLab/SuperCell')")
+
   sc.nw <- SuperCell::build_knn_graph(
     X = PCA.presampled$x[,n.pc],
     k = k.knn, from = "coordinates",
@@ -2188,9 +2194,6 @@ map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
 #' @param ... Additional arguments passed to \code{CellChat::subsetDB}
 #' @return A CellChat tibble containing the inferred communication at the level of 
 #'     ligands/receptors
-#' @importFrom CellChat createCellChat subsetDB subsetData identifyOverExpressedGenes 
-#'   identifyOverExpressedInteractions computeCommunProb filterCommunication subsetCommunication
-#'   normalizeData smoothData aggregateNet setIdent
 #' @importFrom tibble as_tibble
 #' @importFrom dplyr filter mutate
 #' @export
@@ -2207,6 +2210,10 @@ cell_communication <- function(input_read_RNA_assay,
   
   # Input should not be NULL
   if (is.null(input_read_RNA_assay)) return(NULL)
+
+  if (!requireNamespace("CellChat", quietly = TRUE))
+    stop("Package 'CellChat' is required for cell communication analysis. ",
+         "Install it with: remotes::install_github('jinworks/CellChat')")
   
   # Get assay
   if(is.null(assay)) my_assay = input_read_RNA_assay@assays |> names() |> magrittr::extract2(1)
@@ -2274,47 +2281,47 @@ cell_communication <- function(input_read_RNA_assay,
   # Choose cellchat reference
   DB <- switch(reference_db, human = CellChat::CellChatDB.human, mouse = CellChat::CellChatDB.mouse)
   projectionDB <- switch(reference_db, human = CellChat::PPI.human, mouse = CellChat::PPI.mouse)
-    
+
   CellChatDB <- DB
-  
-  CellChatDB.use <- subsetDB(CellChatDB, search =c("Secreted Signaling","ECM-Receptor","Cell-Cell Contact"), key = c("annotation")) 
-  
+
+  CellChatDB.use <- CellChat::subsetDB(CellChatDB, search = c("Secreted Signaling", "ECM-Receptor", "Cell-Cell Contact"), key = c("annotation"))
+
   # CellChat Only Takes log-Normalized data
-  cellchat = counts |> 
-    as("dgCMatrix") |> 
-    normalizeData(do.log = TRUE) |>
-    createCellChat(group.by = cell_type_column, meta = meta, assay = my_assay)
-  
+  cellchat = counts |>
+    as("dgCMatrix") |>
+    CellChat::normalizeData(do.log = TRUE) |>
+    CellChat::createCellChat(group.by = cell_type_column, meta = meta, assay = my_assay)
+
   cellchat@DB <- CellChatDB.use
-  
+
   # Preprocessing
-  cellchat  = cellchat |> 
-    subsetData() |> 
-    identifyOverExpressedGenes() |> 
-    identifyOverExpressedInteractions() |> 
-    smoothData(adj = projectionDB)
-  
+  cellchat = cellchat |>
+    CellChat::subsetData() |>
+    CellChat::identifyOverExpressedGenes() |>
+    CellChat::identifyOverExpressedInteractions() |>
+    CellChat::smoothData(adj = projectionDB)
+
   # Return NULL when none of LR pairs are found
   if (nrow(cellchat@LR$LRsig) == 0) return(NULL)
-    
-  cellchat = cellchat |> 
-    
+
+  cellchat = cellchat |>
+
     # Use projected data
-    computeCommunProb(raw.use = FALSE) |> 
-    
+    CellChat::computeCommunProb(raw.use = FALSE) |>
+
     # Filter the number of cells in each group are less than 10
-    filterCommunication(min.cells = 10) |> 
-    computeCommunProbPathway() |>
-    aggregateNet()
-  
+    CellChat::filterCommunication(min.cells = 10) |>
+    CellChat::computeCommunProbPathway() |>
+    CellChat::aggregateNet()
+
   gc()
-  
+
   # Extract the inferred cellular communication network as a data frame
   # By default, slot.name = "net" extracts the inferred communication at the level of ligands/receptors
-  # Set slot.name = "netP" to access the the inferred communications at the level of signaling pathways
+  # Set slot.name = "netP" to access the inferred communications at the level of signaling pathways
   # If all arguments are NULL, it returns a data frame consisting of all the inferred cell-cell communications
   lr_tbl <- tryCatch(
-    subsetCommunication(cellchat, slot.name = "net", thresh = NULL) |> 
+    CellChat::subsetCommunication(cellchat, slot.name = "net", thresh = NULL) |>
       dplyr::rename(lr_prob = prob,
                     lr_pval = pval),
     error = function(e) {
@@ -2322,9 +2329,9 @@ cell_communication <- function(input_read_RNA_assay,
       return(NULL)
     }
   )
-  
+
   pathway_tbl <- tryCatch(
-    subsetCommunication(cellchat, slot.name = "netP", thresh = NULL) |> 
+    CellChat::subsetCommunication(cellchat, slot.name = "netP", thresh = NULL) |>
       dplyr::rename(pathway_prob = prob,
                     pathway_pval = pval),
     error = function(e) {

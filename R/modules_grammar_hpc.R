@@ -45,7 +45,6 @@
 #' @import ggplot2
 #' @import ggupset
 #' @import here
-#' @import qs
 #' @import crew
 #' @importFrom future tweak
 #' @import crew
@@ -94,6 +93,15 @@ initialise_hpc <- function(input_hpc,
   
   # Write pipeline to a file
   {
+    library(HPCell)
+    library(dplyr)
+    library(magrittr)
+    library(tibble)
+    library(targets)
+    library(tarchetypes)
+    library(crew)
+    library(crew.cluster)
+    
     tar_option_set(
       memory = "transient",
       garbage_collection = g,
