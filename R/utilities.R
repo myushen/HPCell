@@ -2487,6 +2487,16 @@ remove_random_effects <- function(formula) {
   return(fixed_formula)
 }
 
+#' Delete Lines Containing a Word from a File
+#'
+#' @description
+#' Reads a text file and removes all lines that contain a
+#' `target_output = "word"` pattern, then writes the result back to disk.
+#'
+#' @param word The target-output name whose line should be removed.
+#' @param file_path Path to the file to modify.
+#' @return Invisibly returns NULL; called for its side effect of modifying the file.
+#'
 #' @examples
 #' # Example usage:
 #' # delete_lines_with_word("your_text_file.txt", "bla")
@@ -2791,6 +2801,17 @@ write_source = function(user_function_source_path, target_script){
     write_lines(target_script, append = TRUE)
 }
 
+#' Append Targets to the Pipeline Target List
+#'
+#' @description
+#' Appends one or more `tar_target` objects to the global `target_list` used
+#' by the HPCell pipeline script. This function modifies `target_list` in the
+#' calling environment via `<<-`.
+#'
+#' @param target_list The existing list of `tar_target` objects to append to.
+#' @param ... One or more `tar_target` objects to append.
+#' @return Invisibly returns `NULL`; called for its side effect of updating
+#'   `target_list` in the enclosing environment.
 #' @export
 target_append <- function(target_list, ...) {
   # Append the new elements to the list
@@ -3006,6 +3027,22 @@ clean_sce_metadata <- function(sce) {
   sce
 }
 
+#' Compute Pathway-Level Communication Probabilities
+#'
+#' @description
+#' Aggregates ligand-receptor level communication probabilities into pathway-level
+#' probabilities for a CellChat object.
+#'
+#' @param object A `CellChat` object. If `net` and `pairLR.use` are not
+#'   provided, they are extracted from this object.
+#' @param net A list with slots `$prob` (3-D array of probabilities) and
+#'   `$pval` (3-D array of p-values). `NULL` reads from `object@net`.
+#' @param pairLR.use A data frame of significant ligand-receptor pairs with a
+#'   `pathway_name` column. `NULL` reads from `object@LR$LRsig`.
+#' @param thresh Numeric significance threshold; interactions with p-value above
+#'   this value are set to zero. Default: `0.05`.
+#' @return A list containing `prob` (pathway probability array) and
+#'   `pathways.sig` (names of significant pathways).
 #' @export
 computeCommunProbPathway <- function(object = NULL, net = NULL, pairLR.use = NULL, thresh = 0.05) {
   if (is.null(net)) {

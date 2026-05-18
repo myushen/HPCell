@@ -9,10 +9,17 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #' based on these criteria. The function returns a tibble containing log probabilities, FDR, and a classification
 #' indicating whether cells are empty droplets.
 #'
-#' @param input_read_RNA_assay SingleCellExperiment or Seurat object containing RNA assay data.
-#' @param filter_empty_droplets Logical value indicating whether to filter the input data.
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing RNA assay data.
+#' @param total_RNA_count_check Numeric lower-bound total RNA count used as the
+#'   `lower` argument to `DropletUtils::emptyDrops()`. Default: `-Inf`.
+#' @param assay Name of the assay to extract counts from. `NULL` uses the first
+#'   assay.
+#' @param feature_nomenclature Character scalar indicating gene identifier type.
+#'   One of `"symbol"` or `"ensembl"`.
 #'
-#' @return A tibble with columns: logProb, FDR, empty_droplet (classification of droplets).
+#' @return A tibble with columns: `.cell`, `logProb`, `FDR`, `empty_droplet`
+#'   (logical classification).
 #'
 #' @importFrom AnnotationDbi mapIds
 #' @importFrom stringr str_subset
@@ -192,11 +199,19 @@ empty_droplet_id <- function(input_read_RNA_assay,
 #'   The function returns a tibble containing the number of expressed genes, 
 #'   total RNA count for each cell, and a logical annotation indicating whether the droplet was classified as empty.
 #'
-#' @param input_read_RNA_assay SingleCellExperiment or Seurat object containing RNA assay data.
-#' @param filter_empty_droplets Logical value indicating whether to filter the input data.
-#' @param RNA_feature_threshold An optional integer for the number of feature expressed in a sample.
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing RNA assay data.
+#' @param total_RNA_count_check Numeric lower-bound total RNA count threshold.
+#'   Default: `-Inf`.
+#' @param assay Name of the assay to extract counts from. `NULL` uses the first
+#'   assay.
+#' @param feature_nomenclature Character scalar indicating gene identifier type.
+#'   One of `"symbol"` or `"ensembl"`.
+#' @param RNA_feature_threshold Integer minimum number of expressed genes; cells
+#'   with fewer expressed genes are classified as empty.
 #'
-#' @return A tibble with columns: Cell, nFeature_expressed_in_sample, nCount_RNA, empty_droplet (classification of droplets).
+#' @return A tibble with columns: `.cell`, `nFeature_expressed_in_sample`,
+#'   `nCount_RNA`, `empty_droplet` (logical classification).
 #'
 #' @importFrom AnnotationDbi mapIds
 #' @importFrom stringr str_subset
@@ -283,13 +298,17 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
 #' (Blueprint and Monaco Immune data). It can also perform cell type labeling using Azimuth when a reference
 #' is provided.
 #'
-#' @param assay The assay to be used for analysis, specified as a character string.
-#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
-#' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param reference_azimuth Optional reference data for Azimuth.
-#' @param assay assay used, default = "RNA" 
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing RNA assay data.
+#' @param empty_droplets_tbl A tibble identifying empty droplets (output of
+#'   `empty_droplet_id()`). `NULL` skips filtering.
+#' @param reference_azimuth Optional Azimuth reference object or reference name
+#'   string. `NULL` uses the default BlueprintEncode + Monaco immune references.
+#' @param assay Name of the assay to use. `NULL` uses the first assay.
+#' @param feature_nomenclature Character scalar indicating gene identifier type.
+#'   One of `"symbol"` or `"ensembl"`.
 #'
-#' @return A tibble with cell type annotation data.
+#' @return A tibble with cell-type annotation data.
 #'
 #' @importFrom celldex BlueprintEncodeData
 #' @importFrom celldex MonacoImmuneData
@@ -534,12 +553,17 @@ annotation_label_transfer <- function(input_read_RNA_assay,
 #' @description
 #' `alive_identification` filters out dead cells by analyzing mitochondrial and ribosomal gene expression percentages.
 #'
-#' @param assay The assay to be used for analysis, specified as a character string. 
-#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
-#' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param cell_type_ensembl_harmonised_tbl A tibble with annotated cell type label data.
-#' @param cell_type_column A character vector indicating the cell type column used for grouping during quality control and dead cell removal.
-#' @param assay assay used, default = "RNA" 
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing RNA assay data.
+#' @param empty_droplets_tbl A tibble identifying empty droplets (output of
+#'   `empty_droplet_id()`). `NULL` skips filtering.
+#' @param cell_type_ensembl_harmonised_tbl A tibble with harmonised cell-type
+#'   annotations. `NULL` skips annotation-based grouping.
+#' @param cell_type_column Character column name used to stratify QC thresholds
+#'   per cell type. `NULL` applies global thresholds.
+#' @param assay Name of the assay to use. `NULL` uses the first assay.
+#' @param feature_nomenclature Character scalar indicating gene identifier type.
+#'   One of `"symbol"` or `"ensembl"`.
 #'
 #' @return A tibble identifying alive cells.
 #'
@@ -875,12 +899,16 @@ doublet_identification <- function(input_read_RNA_assay,
 #' Returns a tibble containing cell identifiers with their predicted classification 
 #' into cell cycle phases: G2M, S, or G1 phase.
 #'
-#' @param assay The assay to be used for analysis, specified as a character string.
-#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
-#' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param assay Name of the assay to use.
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing RNA assay data.
+#' @param empty_droplets_tbl A tibble identifying empty droplets (output of
+#'   `empty_droplet_id()`). `NULL` skips filtering.
+#' @param feature_nomenclature Character scalar indicating gene identifier type.
+#'   One of `"symbol"` or `"ensembl"`.
+#' @param assay Name of the assay to use. `NULL` uses the first assay.
 #'
-#' @return A tibble with cell identifiers and their cell cycle phase classifications.
+#' @return A tibble with cell identifiers and their cell cycle phase classifications
+#'   (G1, S, or G2M).
 #'
 #' @importFrom dplyr left_join
 #' @importFrom dplyr filter
@@ -961,17 +989,21 @@ cell_cycle_scoring <- function(input_read_RNA_assay,
 #' Regresses out variations due to mitochondrial content, ribosomal content, and 
 #' cell cycle effects.
 #'
-#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object containing RNA assay data.
-#' @param empty_droplets_tbl A tibble identifying empty droplets.
-#' @param alive_identification_tbl A tibble from alive cell identification.
-#' @param doublet_identification_tbl A tibble from doublet identification.
-#' @param cell_cycle_score_tbl A tibble from cell cycle scoring.
-#' @param assay assay used, default = "RNA" 
-#' @param factors_to_regress A character vector specifying cell-level covariates to regress out during `SCTransform` normalization.
-#' @param external_path A character vector of directory that the data to be stored
-#' @param data_container_type A character vector specifying the output file type. Ideally it should match to the input file type.
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing RNA assay data.
+#' @param empty_droplets_tbl A tibble identifying empty droplets. `NULL` skips.
+#' @param alive_identification_tbl A tibble from alive cell identification. `NULL` skips.
+#' @param doublet_identification_tbl A tibble from doublet identification. `NULL` skips.
+#' @param cell_cycle_score_tbl A tibble from cell cycle scoring. `NULL` skips.
+#' @param assay Name of the assay to use. `NULL` uses the first assay.
+#' @param factors_to_regress Character vector of cell-level covariates to regress
+#'   out during SCTransform normalisation. `NULL` applies no regression.
+#' @param external_path Character path to the directory where intermediate data
+#'   are stored.
+#' @param container_type Character scalar specifying the output file format.
+#'   Should match the input data container type.
 #'
-#' @return Normalized and adjusted data.
+#' @return Normalised and covariate-adjusted single-cell object.
 #'
 #' @importFrom dplyr left_join filter
 #' @importFrom Seurat NormalizeData VariableFeatures SCTransform
@@ -1209,9 +1241,9 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
     NormalizeData(normalization.method = "LogNormalize") |> 
     FindVariableFeatures(nfeatures = 2000) |>
     ScaleData() |>
-    RunPCA(npcs = min(50, ncol(input_read_RNA_assay) - 1), verbose = F) |> 
+    RunPCA(npcs = min(50, ncol(input_read_RNA_assay) - 1), verbose = FALSE) |> 
     RunUMAP(reduction = "pca", dims = c(1:min(30, ncol(input_read_RNA_assay) - 1)), 
-            n.neighbors = min(30, ncol(input_read_RNA_assay) - 1), verbose = F) |> 
+            n.neighbors = min(30, ncol(input_read_RNA_assay) - 1), verbose = FALSE) |> 
     Seurat::GetAssayData(layer = "data")
   
   N.c <- ncol(normalized_rna)
@@ -1432,7 +1464,7 @@ postprocess_SCimplify <- function(preprocessed,
   SC.NW                        <- igraph::contract(sc.nw$graph.knn, membership.presampled)
   if (!do.approx) {
     SC.NW                        <- igraph::simplify(SC.NW,
-                                                     remove.loops = T,
+                                                     remove.loops = TRUE,
                                                      edge.attr.comb = "sum")
   }
   
@@ -1497,7 +1529,7 @@ postprocess_SCimplify <- function(preprocessed,
     
     
     SC.NW                        <- igraph::simplify(SC.NW,
-                                                     remove.loops = T,
+                                                     remove.loops = TRUE,
                                                      edge.attr.comb = "sum")
     names(membership.all) <- names_membership.all
     membership.all <- membership.all[cell.ids]
@@ -1703,14 +1735,20 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
 #' and optionally includes annotation label transfer information to generate a 
 #' processed dataset ready for downstream analysis.
 #'
-#' @param tissue Type of tissue.
-#' @param non_batch_variation_removal_S Result from non-batch variation removal.
-#' @param alive_identification_tbl A tibble from alive cell identification.
-#' @param cell_cycle_score_tbl A tibble from cell cycle scoring.
-#' @param annotation_label_transfer_tbl A tibble from annotation label transfer.
-#' @param doublet_identification_tbl A tibble from doublet identification.
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing the raw RNA assay data.
+#' @param empty_droplets_tbl A tibble identifying empty droplets. `NULL` skips.
+#' @param non_batch_variation_removal_S Result from `non_batch_variation_removal()`;
+#'   an SCT-normalised Seurat object. `NULL` skips SCT integration.
+#' @param alive_identification_tbl A tibble from `alive_identification()`. `NULL` skips.
+#' @param cell_cycle_score_tbl A tibble from `cell_cycle_scoring()`. `NULL` skips.
+#' @param cell_type_ensembl_harmonised_tbl A tibble with harmonised cell-type
+#'   annotations. `NULL` skips annotation integration.
+#' @param annotation_label_transfer_tbl A tibble from `annotation_label_transfer()`.
+#'   `NULL` skips.
+#' @param doublet_identification_tbl A tibble from doublet identification. `NULL` skips.
 #'
-#' @return Processed and filter_empty_droplets dataset.
+#' @return A preprocessed single-cell object with all QC metadata attached.
 #'
 #' @importFrom dplyr filter
 #' @importFrom dplyr select
@@ -1830,19 +1868,29 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' Aggregates cells based on sample and cell type annotations, creating pseudobulk samples 
 #' for each combination. Handles RNA and ADT assays
 #'
-#' @param preprocessing_output_S Processed dataset from preprocessing.
-#' @param assays A character vector specifying the assays to be included in the 
-#' pseudobulk creation process, such as c("RNA", "ADT").
-#' @param x A grouping variable used to aggregate cells into pseudobulk samples.
-#' This variable should be present in the `preprocessing_output_S` object and 
-#' typically represents a factor such as sample ID or condition.
-#' @param container_type A character vector specifying the output file type. Ideally it should match to the input file type.
-#' @param ... Additional arguments passed to internal functions used within 
-#' `create_pseudobulk`. This includes parameters for customization of 
-#' aggregation, data transformation, or any other process involved in the 
-#' creation of pseudobulk samples.
-#' 
-#' @return List containing pseudobulk data aggregated by sample and by both sample and cell type.
+#' @param input_read_RNA_assay A `SingleCellExperiment` or `Seurat` object
+#'   containing RNA assay data.
+#' @param sample_names_vec Character vector of sample names (one element per
+#'   sample mapping to the input object).
+#' @param empty_droplets_tbl A tibble identifying empty droplets. `NULL` skips.
+#' @param alive_identification_tbl A tibble from `alive_identification()`. `NULL` skips.
+#' @param cell_cycle_score_tbl A tibble from `cell_cycle_scoring()`. `NULL` skips.
+#' @param annotation_label_transfer_tbl A tibble from `annotation_label_transfer()`.
+#'   `NULL` skips.
+#' @param cell_type_ensembl_harmonised_tbl A tibble with harmonised cell-type
+#'   annotations. `NULL` skips.
+#' @param doublet_identification_tbl A tibble from doublet identification. `NULL` skips.
+#' @param x Optional grouping variable (column name) used to further stratify
+#'   pseudobulk aggregation beyond sample.
+#' @param external_path Character path to the directory where pseudobulk HDF5
+#'   files are stored.
+#' @param assays Character vector of assay names to include (e.g. `c("RNA", "ADT")`).
+#'   `NULL` uses all assays.
+#' @param container_type Character scalar specifying the output file format.
+#' @param ... Additional arguments passed to internal aggregation functions.
+#'
+#' @return A list containing pseudobulk `SummarizedExperiment` objects aggregated
+#'   by sample and (optionally) by sample × cell type.
 #' 
 #' @import tidySingleCellExperiment
 #' @import tidySummarizedExperiment
@@ -1984,10 +2032,10 @@ create_pseudobulk <- function(input_read_RNA_assay,
 #' @description
 #' Merge pseudobulk from all samples. Ensures that missing genes are accounted 
 #' for and aligns data across multiple samples.
-#' @param pseudobulk_list A list pseudobulk samples generated by `create_pseudobulk`
-#' @param assays Default is set of `RNA` 
-#' @param x User specified character vector for the column from which we subset the samples for pseudobulk analysis 
-#' @param ... Additional arguments 
+#' @param pseudobulk_list A list of pseudobulk samples generated by `create_pseudobulk()`.
+#' @param external_path Character path to the directory where the merged HDF5
+#'   pseudobulk file is written.
+#' @param ... Additional arguments passed to internal functions.
 #' 
 #' @importFrom purrr map
 #' @importFrom dplyr select
@@ -2076,10 +2124,11 @@ pseudobulk_merge <- function(pseudobulk_list, external_path, ...) {
 #' The results are joined back to each SingleCellExperiment object. If no abundance assay is specified, 
 #' the function defaults to the first assay in each SingleCellExperiment object.
 #'
-# @examples
-# # Assuming `se_list` is a list of SingleCellExperiment objects
-# result <- map_add_dispersion_to_se(se_list, .col = se_objects, abundance = "counts")
-#'
+#' @examples
+#' \dontrun{
+#' # Assuming `se_list` is a list of SingleCellExperiment objects
+#' result <- map_add_dispersion_to_se(se_list, .col = se_objects, abundance = "counts")
+#' }
 #' @importFrom magrittr extract2
 #' @importFrom edgeR estimateDisp
 #' @importFrom dplyr mutate
@@ -2525,6 +2574,16 @@ find_variable_genes <- function(input_seurat, empty_droplet){
 }
 
 
+#' Mark a String as a Targets Target Reference
+#'
+#' @description
+#' Converts a character string into an unquoted symbol so that targets pipeline
+#' functions can recognise it as a reference to an upstream target rather than
+#' a literal string value.
+#'
+#' @param x A character scalar naming the upstream targets target.
+#' @return An unquoted symbol (`name`) representing the target, or `NULL` if
+#'   `x` is `NULL`.
 #' @export
 is_target = function(x) {
   
