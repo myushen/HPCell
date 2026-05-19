@@ -304,6 +304,8 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
 #'   `empty_droplet_id()`). `NULL` skips filtering.
 #' @param reference_azimuth Optional Azimuth reference object or reference name
 #'   string. `NULL` uses the default BlueprintEncode + Monaco immune references.
+#'   Requires the \pkg{Azimuth} package (GitHub-only:
+#'   `remotes::install_github("satijalab/azimuth@master")`).
 #' @param assay Name of the assay to use. `NULL` uses the first assay.
 #' @param feature_nomenclature Character scalar indicating gene identifier type.
 #'   One of `"symbol"` or `"ensembl"`.

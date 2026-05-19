@@ -20,7 +20,9 @@ containing RNA assay data.}
 \code{empty_droplet_id()}). \code{NULL} skips filtering.}
 
 \item{reference_azimuth}{Optional Azimuth reference object or reference name
-string. \code{NULL} uses the default BlueprintEncode + Monaco immune references.}
+string. \code{NULL} uses the default BlueprintEncode + Monaco immune references.
+Requires the \pkg{Azimuth} package (GitHub-only:
+\code{remotes::install_github("satijalab/azimuth@master")}).}
 
 \item{assay}{Name of the assay to use. \code{NULL} uses the first assay.}
 
