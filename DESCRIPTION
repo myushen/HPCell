@@ -1,6 +1,6 @@
 Package: HPCell
-Title: Massively-parallel R native pipeline for single-cell analysis
-Version: 0.3.13
+Title: Massively-Parallel R Native Pipeline for Single-Cell Analysis
+Version: 0.4.0
 Authors@R: c(person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
                   role = c("aut", "cre")),
                   person("Jiayi", "Si", email = "si.j@wehi.edu.au",
@@ -12,11 +12,12 @@ Roxygen: list(markdown = TRUE)
 Depends: 
     R (>= 4.5.0)
 Remotes: 
-    sqjin/CellChat,
+    jinworks/CellChat,
     satijalab/seurat@seurat5,
     satijalab/seurat-data@seurat5,
     satijalab/azimuth@master,
-    mojaveazure/seurat-disk@master
+    mojaveazure/seurat-disk@master,
+    GfellerLab/SuperCell
 Biarch: true
 Imports:
   targets,
@@ -34,10 +35,9 @@ Imports:
   tidyr, 
   glue,
   stringr,
-  tidyseurat,
+  tidyseurat (>= 0.8.0),
   purrr,
   readr,
-  patchwork,
   tibble,
   DropletUtils,
   EnsDb.Hsapiens.v86,
@@ -45,55 +45,55 @@ Imports:
   SingleR,
   celldex,
   scuttle,
-  gridGraphics,
   scDblFinder,
   magrittr,
   rlang, 
   S4Vectors, 
-  BiocGenerics, 
   AnnotationDbi, 
   broom,
   digest, 
-  cowplot, 
   igraph, 
   callr, 
-  circlize, 
-  future.apply, 
   ids, 
-  RColorBrewer,
-  digest, 
-  cowplot, 
-  igraph, 
-  reshape2,
-  callr,
   future,
   methods,
-  pbapply,
-  reshape2,
-  scales,
   data.table, 
   ggplot2, 
   ggupset, 
   here, 
-  qs,
-  ensembldb,
-  Azimuth,
   DelayedArray,
   HDF5Array, 
   SeuratObject,
   SingleCellExperiment, 
   biomaRt, 
   lme4, 
-  tidyselect
+  tidyselect,
+  irlba,
+  proxy,
+  ensembldb,
+  AnnotationFilter,
+  BiocParallel,
+  cli,
+  rhdf5
 Suggests: 
-    testthat(>= 3.0.0), 
+    testthat (>= 3.0.0),
+    qs,
     scRNAseq,
-    irlba,
     SeuratDisk,
-    zellkonverter
+    zellkonverter,
+    BiocGenerics,
+    RColorBrewer,
+    circlize,
+    cowplot,
+    future.apply,
+    gridGraphics,
+    patchwork,
+    pbapply,
+    reshape2,
+    scales
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 SystemRequirements: GNU make
 biocViews: 
     ImmunoOncology, 
