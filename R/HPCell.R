@@ -5,11 +5,12 @@
 #' @importFrom utils data head tail
 "_PACKAGE"
 
-# Register tidyseurat / tidySingleCellExperiment S3 methods (e.g. left_join.Seurat)
-# without import(tidyseurat) in NAMESPACE (avoids dplyr export conflicts on check).
+# Register tidy* S3 methods (e.g. left_join.Seurat, dplyr verbs on SCE)
+# without import(tidy*) in NAMESPACE (avoids export conflicts with dplyr/broom on check).
 .onLoad <- function(libname, pkgname) {
   loadNamespace("tidyseurat")
   loadNamespace("tidySingleCellExperiment")
+  loadNamespace("tidySummarizedExperiment")
 }
 
 .myDataEnv <- new.env(parent = emptyenv()) # not exported

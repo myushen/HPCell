@@ -1897,7 +1897,6 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @return A list containing pseudobulk `SummarizedExperiment` objects aggregated
 #'   by sample and (optionally) by sample × cell type.
 #' 
-#' @import tidySummarizedExperiment
 #' @importFrom dplyr left_join
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate

@@ -40,7 +40,6 @@
 #' @import crew.cluster
 #' @import tarchetypes
 #' @import targets
-#' @import broom
 #' @import ggplot2
 #' @import ggupset
 #' @import here
