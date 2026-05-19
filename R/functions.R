@@ -1395,7 +1395,7 @@ preprocess_SCimplify <- function(input_read_RNA_assay,
 #' @param ... other parameters of \link[SuperCell]{build_knn_graph} function
 #'
 #' @return A tibble with column 'cell' and 'membership' indicating which metacell cluster each cell belongs to.
-#' @importFrom igraph cluster_walktrap cluster_louvain contract simplify E V
+#' @importFrom igraph cluster_walktrap cluster_louvain contract E V
 #' @importFrom Matrix t
 #' @importFrom proxy dist
 #' @export
@@ -1764,8 +1764,6 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
 #' @import SeuratObject
 #' @importFrom SummarizedExperiment assay
 #' @importFrom SummarizedExperiment assay<-
-#' @import tidySingleCellExperiment 
-#' @import tidyseurat
 #' @importFrom magrittr not
 #' @importFrom SingleCellExperiment altExp
 #' @importFrom SingleCellExperiment altExp<-
@@ -1899,8 +1897,6 @@ preprocessing_output <- function(input_read_RNA_assay,
 #' @return A list containing pseudobulk `SummarizedExperiment` objects aggregated
 #'   by sample and (optionally) by sample × cell type.
 #' 
-#' @import tidySingleCellExperiment
-#' @import tidySummarizedExperiment
 #' @importFrom dplyr left_join
 #' @importFrom dplyr filter
 #' @importFrom dplyr mutate
@@ -2119,6 +2115,7 @@ pseudobulk_merge <- function(pseudobulk_list, external_path, ...) {
 #'
 #' @param se_df A data frame or list containing SingleCellExperiment objects.
 #' @param .col A symbol indicating the column in `se_df` that contains SingleCellExperiment objects.
+#' @param formula (Optional) A formula argument accepted for interface compatibility; not used internally.
 #' @param abundance (Optional) A character vector specifying the name of the assay to be used 
 #'                  for dispersion estimation. If NULL or not provided, the first assay is used.
 #'
@@ -2145,7 +2142,7 @@ pseudobulk_merge <- function(pseudobulk_list, external_path, ...) {
 #' @import dplyr 
 #' @importFrom data.table :=
 #' @export
-map_add_dispersion_to_se = function(se_df, .col, abundance = NULL){
+map_add_dispersion_to_se = function(se_df, .col, formula = NULL, abundance = NULL){
   
   # Fix GitChecks 
   assay_name = NULL 

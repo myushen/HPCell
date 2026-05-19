@@ -17,7 +17,8 @@ remove_doublets_scDblFinder(
   input_hpc,
   target_input = "data_object",
   target_output = "doublet_tbl",
-  target_empry_droplets = "empty_tbl"
+  target_empry_droplets = "empty_tbl",
+  ...
 )
 }
 \arguments{
