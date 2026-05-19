@@ -37,7 +37,6 @@
 #'
 #' @importFrom glue glue
 #' @importFrom targets tar_script
-#' @importFrom magrittr set_names
 #' @import crew.cluster
 #' @import tarchetypes
 #' @import targets
@@ -94,13 +93,13 @@ initialise_hpc <- function(input_hpc,
   # Write pipeline to a file
   {
     library(HPCell)
-    library(dplyr)
-    library(magrittr)
-    library(tibble)
-    library(targets)
-    library(tarchetypes)
-    library(crew)
-    library(crew.cluster)
+    do.call("library", list("dplyr"))
+    do.call("library", list("magrittr"))
+    do.call("library", list("tibble"))
+    do.call("library", list("targets"))
+    do.call("library", list("tarchetypes"))
+    do.call("library", list("crew"))
+    do.call("library", list("crew.cluster"))
     
     tar_option_set(
       memory = "transient",
@@ -340,8 +339,8 @@ remove_dead_scuttle.HPCell = function(
     target_output = "alive_tbl",
     target_input = "data_object", 
     target_empty_droplets = "empty_tbl",
-    target_annotation = NULL
-    
+    target_annotation = NULL,
+    ...
   ) {
   
   input_hpc |> 
@@ -415,9 +414,10 @@ remove_doublets_scDblFinder <- function(
 #' @export
 remove_doublets_scDblFinder.HPCell = function(
     input_hpc, target_input = "data_object", target_output = "doublet_tbl",
-    target_empry_droplets = "empty_tbl"
+    target_empry_droplets = "empty_tbl",
     # , target_annotation = "annotation_tbl",
     # reference_label_group_by = "monaco_first.labels.fine"
+    ...
   ) {
 
   input_hpc |>
@@ -740,7 +740,6 @@ get_single_cell.HPCell = function(input_hpc, target_input = "data_object", targe
 #' @noRd
 #'
 #' @importFrom tidybulk test_differential_abundance
-#' @exportMethod test_differential_abundance
 #' @param .data An HPCell object.
 #' @param .formula A formula used to model the design matrix.
 #' @param .sample Sample parameter.

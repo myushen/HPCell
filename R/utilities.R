@@ -379,7 +379,6 @@ seurat_to_variable_features_overall = function(counts, assay, features_number = 
 #'
 #' @importFrom rlang enquo
 #' @importFrom rlang is_symbolic
-#' @import tidyseurat
 #' @importFrom Seurat NormalizeData
 #' @importFrom stringr str_subset
 #' @importFrom purrr map_int
