@@ -1,5 +1,5 @@
 library(targets)
-store = "/vast/scratch/users/shen.m/cellnexus_dataset_cell_map_Jul_2024_v1_2_1_target_store"
+store = "/vast/scratch/users/shen.m/cellnexus_dataset_cell_map_Jul_2024_v1_2_0_target_store"
 tar_script({
   library(dplyr)
   library(magrittr)
@@ -8,6 +8,35 @@ tar_script({
   library(tarchetypes)
   library(crew)
   library(crew.cluster)
+  
+  new_elastic <- function(name, mem_gb, time_min, workers, crashes_max, cpus_per_task = 1, backup = NULL) {
+    crew_controller_slurm(
+      name = name,
+      workers = workers,
+      crashes_max = crashes_max,
+      seconds_idle = 30,
+      options_cluster = crew_options_slurm(
+        memory_gigabytes_required = mem_gb,
+        cpus_per_task = cpus_per_task,
+        time_minutes = time_min
+      ),
+      backup = backup
+    )
+  }
+  elastic_160 <- new_elastic("elastic_160", 160, 60 * 24, workers = 8,  crashes_max = 2)
+  elastic_120  <- new_elastic("elastic_120",  120,  60 * 4,  workers = 16, crashes_max = 1, cpus_per_task = 1, backup = elastic_160)
+  elastic_80  <- new_elastic("elastic_80",   80,  60 * 4,  workers = 24, crashes_max = 1, cpus_per_task = 1, backup = elastic_120)
+  elastic_40  <- new_elastic("elastic_40",   40,  60 * 4,  workers = 32, crashes_max = 1, cpus_per_task = 1, backup = elastic_80)
+  elastic_20  <- new_elastic("elastic_20",   20,  60 * 4,  workers = 48, crashes_max = 1, cpus_per_task = 1, backup = elastic_40)
+  elastic_10   <- new_elastic("elastic_10",   10, 60 * 4,  workers = 150, crashes_max = 2, cpus_per_task = 1, backup = elastic_20)
+  
+  elastic_5_minimal   <- new_elastic("elastic_5_minimal",     5, 60 * 4,  workers = 300, crashes_max = 2, cpus_per_task = 1, backup = elastic_10)
+  
+  # Group for targets (small → large)
+  controllers <- crew_controller_group(
+    elastic_10, elastic_20, elastic_40, elastic_80, elastic_120, elastic_160, elastic_5_minimal
+  )
+  
   
   tar_option_set(
     memory = "transient", 
@@ -18,24 +47,11 @@ tar_script({
     cue = tar_cue(mode = "never"),
     
     workspace_on_error = TRUE,
-    controller = crew_controller_group(
-      list(
-        crew_controller_slurm(
-          name = "elastic",
-          workers = 300,
-          tasks_max = 20,
-          seconds_idle = 30,
-          crashes_error = 10,
-          options_cluster = crew_options_slurm(
-            memory_gigabytes_required = c(25, 35, 40, 80, 160),
-            cpus_per_task = c(2, 2, 5, 10, 20),
-            time_minutes = c(30, 30, 30, 60*4, 60*24),
-            verbose = T
-          )
-        )
-      )
-    ), 
-    trust_object_timestamps = TRUE
+    controller = controllers,
+    trust_object_timestamps = TRUE,
+    resources = tar_resources(
+      crew = tar_resources_crew(controller = "elastic_5_minimal")
+    ) 
   )
   
   get_unique_file_ids <- function(cell_metadata){
@@ -58,7 +74,7 @@ tar_script({
   }
   
   list(
-    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_5_0_mengyuan.parquet",
+    tar_target(cell_metadata , "/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/cell_metadata_cell_type_consensus_v1_6_0_mengyuan.parquet",
                deployment = "main"),
     tar_target(
       unique_file_ids,
@@ -68,19 +84,17 @@ tar_script({
       get_unique_file_ids(cell_metadata) 
       # |> head(2)
       ,
-      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
-      # resources = tar_resources(
-      #   crew = tar_resources_crew(controller = "elastic")
-      # )
+      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array"),
+      deployment = "main"
     ),
     tar_target(
       file_id_cell_id_dict,
       create_file_id_cell_id_dict(cell_metadata, unique_file_ids),
       pattern = map(unique_file_ids),
-      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array")
-      # resources = tar_resources(
-      #   crew = tar_resources_crew(controller = "elastic")
-      # )
+      packages = c("tidySingleCellExperiment", "SingleCellExperiment", "tidyverse", "glue", "digest", "scater", "arrow", "dplyr", "duckdb", "BiocParallel", "parallelly", "HDF5Array"),
+      resources = tar_resources(
+        crew = tar_resources_crew(controller = "elastic_5_minimal")
+      )
     )
   )
   
@@ -98,7 +112,7 @@ job::job({
 })
 
 file_id_cell_id_dict = tar_read(file_id_cell_id_dict, store = store)
-file_id_cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_1_1_Jul_2024.parquet",
+file_id_cell_id_dict |> arrow::write_parquet("/vast/projects/cellxgene_curated/metadata_cellxgene_mengyuan/file_id_cell_id_dict_v1_2_0_Jul_2024.parquet",
                                      compression = "zstd")
 rm(file_id_cell_id_dict)
 gc()

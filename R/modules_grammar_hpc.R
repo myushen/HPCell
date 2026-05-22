@@ -42,6 +42,7 @@
 initialise_hpc <- function(input_hpc,
                            store =  targets::tar_config_get("store"),
                            computing_resources = crew_controller_local(workers = 1),
+                           default_controller = NULL,
                            tier = rep(1, length(input_hpc)),
                            debug_step = NULL,
                            RNA_assay_name = "RNA",
@@ -103,13 +104,14 @@ initialise_hpc <- function(input_hpc,
       controller = crew_controller_group ( readRDS("temp_computing_resources.rds") ), 
       packages = c("HPCell"),
       trust_object_timestamps = TRUE, 
-      workspace_on_error = w
+      workspace_on_error = w,
+      resources = if (!is.null(dc)) tar_resources(crew = tar_resources_crew(controller = dc)) else tar_resources()
     )
      
     target_list = list(  )
     
     } |> 
-    substitute(env = list(d = debug_step, e = error, u = update, g = garbage_collection, w = workspace_on_error)) |> 
+    substitute(env = list(d = debug_step, e = error, u = update, g = garbage_collection, w = workspace_on_error, dc = default_controller)) |> 
     tar_script_append2(script = glue("{store}.R"), append = FALSE)
 
   

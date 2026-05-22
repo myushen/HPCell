@@ -8,6 +8,7 @@ initialise_hpc(
   input_hpc,
   store = targets::tar_config_get("store"),
   computing_resources = crew_controller_local(workers = 1),
+  default_controller = NULL,
   tier = rep(1, length(input_hpc)),
   debug_step = NULL,
   RNA_assay_name = "RNA",

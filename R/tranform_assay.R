@@ -189,11 +189,7 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   # Check if the transformation method is not 'identity' and counts exceed counts upper bound
   # Scale for other transform function is handled internally in `transform_function`
   if (identical(transform_function, identity) || identical(transform_function, expm1)) {
-    # For identity: no scaling needed
-    # For expm1: pre-scale first, then apply
-    if (identical(transform_function, expm1)) {
-      counts <- limit_max_to_scale(counts, scale_max)
-    }
+    counts <- limit_max_to_scale(counts, scale_max)
     counts <- transform_function(counts)
   } else {
     # identity_with_max_limit and safe_expm1 handle scale_max internally
