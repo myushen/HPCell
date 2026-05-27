@@ -2,7 +2,7 @@
 % Please edit documentation in R/modules_grammar_hpc.R
 \name{initialise_hpc}
 \alias{initialise_hpc}
-\title{Run Targets Pipeline for HPCell}
+\title{Initialise an HPCell Targets Pipeline}
 \usage{
 initialise_hpc(
   input_hpc,
@@ -22,9 +22,10 @@ initialise_hpc(
 )
 }
 \arguments{
-\item{input_hpc}{Character vector of input data path for the pipeline.}
+\item{input_hpc}{Named character vector of paths to input data files, one
+element per sample. If names are not set, integer indices are used.}
 
-\item{store}{Directory path for storing the pipeline files.}
+\item{store}{Directory path where pipeline files and targets store are written.}
 
 \item{computing_resources}{A \code{crew} controller object (or list of controllers)
 specifying the computing back-end. Defaults to a local single-worker controller.}
@@ -37,18 +38,16 @@ Passed to \code{targets::tar_resources(crew = tar_resources_crew(controller = ..
 \item{tier}{Integer vector (same length as \code{input_hpc}) assigning each sample
 to a processing tier for tiered execution. Default: all samples in tier 1.}
 
-\item{debug_step}{Optional step for debugging.}
+\item{tier}{Integer vector (same length as \code{input_hpc}) assigning each sample
+to a processing tier for tiered execution. Default: all samples in tier 1.}
 
-\item{RNA_assay_name}{Name of the RNA assay.}
+\item{debug_step}{Character name of a single target to debug; passed to
+\code{targets::tar_option_set(debug = ...)}. \code{NULL} disables debugging.}
 
-\item{gene_nomenclature}{Character vector indicating gene nomenclature in input_data}
+\item{RNA_assay_name}{Name of the RNA assay in the input Seurat/SCE object.}
 
-\item{data_container_type}{A character vector of length one specifies the input data type.
-The accepted input data type are:
-sce_rds for \code{SingleCellExperiment} RDS,
-seurat_rds for \code{Seurat} RDS,
-sce_hdf5 for \code{SingleCellExperiment} HDF5-based object
-seurat_h5 for \code{Seurat} HDF5-based object}
+\item{gene_nomenclature}{Character scalar indicating gene identifier type in
+the input data. One of \code{"symbol"} or \code{"ensembl"}.}
 
 \item{verbosity}{Reporter string passed to \code{targets::tar_make()}. Defaults to
 the current targets configuration value.}
@@ -66,9 +65,12 @@ triggered during the pipeline run. Default: \code{0} (disabled).}
 a target errors. Default: \code{FALSE}.}
 }
 \value{
-The output of the \code{targets} pipeline, typically a pre-processed data set.
+An \code{HPCell} S3 object containing the initialisation arguments, ready
+to be extended with pipeline step functions.
 }
 \description{
-This function sets up and executes a \code{targets} pipeline for HPCell. It saves input data and configurations,
-writes a pipeline script, and runs the pipeline using the 'targets' package.
+Sets up and writes a \code{targets} pipeline script for HPCell. Saves input data
+and configuration to disk, then returns an \code{HPCell} object that downstream
+grammar functions (e.g. \code{remove_empty_DropletUtils}, \code{evaluate_hpc}) can
+extend before the pipeline is executed with \code{evaluate_hpc()}.
 }
