@@ -1,7 +1,9 @@
 Package: HPCell
 Title: Massively-Parallel R Native Pipeline for Single-Cell Analysis
-Version: 0.5.0
+Version: 0.6.0
 Authors@R: c(person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
+                  role = c("aut", "cre")),
+                  person("Mengyuan", "Shen", email = "shen.m@wehi.edu.au",
                   role = c("aut", "cre")),
                   person("Jiayi", "Si", email = "si.j@wehi.edu.au",
                   role = c("aut"))
