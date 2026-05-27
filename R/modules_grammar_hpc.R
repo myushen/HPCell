@@ -6,14 +6,16 @@
 #'
 #' @param input_hpc Character vector of input data path for the pipeline.
 #' @param store Directory path for storing the pipeline files.
-#' @param input_reference Optional reference data.
-#' @param tissue Tissue type for the analysis.
-#' @param computing_resources Configuration for computing resources.
+#' @param computing_resources A `crew` controller object (or list of controllers)
+#'   specifying the computing back-end. Defaults to a local single-worker controller.
+#' @param default_controller Optional character name of the default `crew`
+#'   controller to use for targets that do not specify their own controller.
+#'   Passed to `targets::tar_resources(crew = tar_resources_crew(controller = ...))`.
+#'   `NULL` uses targets defaults.
+#' @param tier Integer vector (same length as `input_hpc`) assigning each sample
+#'   to a processing tier for tiered execution. Default: all samples in tier 1.
 #' @param debug_step Optional step for debugging.
-#' @param filter_empty_droplets Flag to indicate if input filtering is needed.
 #' @param RNA_assay_name Name of the RNA assay.
-#' @param sample_column Column name for sample identification.
-#' @param cell_type_annotation_column Column name for cell type annotation in input data
 #' @param gene_nomenclature Character vector indicating gene nomenclature in input_data
 #' @param data_container_type A character vector of length one specifies the input data type.
 #' The accepted input data type are: 
@@ -21,6 +23,16 @@
 #' seurat_rds for `Seurat` RDS,
 #' sce_hdf5 for `SingleCellExperiment` HDF5-based object
 #' seurat_h5 for `Seurat` HDF5-based object
+#' @param verbosity Reporter string passed to `targets::tar_make()`. Defaults to
+#'   the current targets configuration value.
+#' @param error Error-handling strategy passed to `targets::tar_option_set()`.
+#'   `NULL` uses the targets default.
+#' @param update Cue mode string for `targets::tar_cue()`, controlling when
+#'   targets are re-run. Default: `"thorough"`.
+#' @param garbage_collection Numeric interval at which R garbage collection is
+#'   triggered during the pipeline run. Default: `0` (disabled).
+#' @param workspace_on_error Logical; if `TRUE`, saves a workspace snapshot when
+#'   a target errors. Default: `FALSE`.
 #' @return The output of the `targets` pipeline, typically a pre-processed data set.
 #'
 #' @importFrom glue glue
