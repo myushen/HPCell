@@ -267,6 +267,20 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
       filter(ensembl_gene_id %in% rownames(input_read_RNA_assay)) |> pull(ensembl_gene_id)
   }
   
+  # Capture any sample-level columns to propagate to output
+  .sample_col_nms <- {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      colnames(input_read_RNA_assay[[]])
+    else
+      colnames(colData(input_read_RNA_assay))
+  } |> str_subset("(?i)^sample")
+  .sample_tbl <- if (length(.sample_col_nms) > 0) {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+    else
+      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+  } else NULL
+
   # Get counts
   if (inherits(input_read_RNA_assay, "Seurat")) {
     counts <- GetAssayData(input_read_RNA_assay, assay, layer = "counts")
@@ -288,6 +302,7 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
   # density_value = density_est$x[which.max(density_est$y)]
   # if (density_value < RNA_feature_threshold) return(NULL)
   
+  if (!is.null(.sample_tbl)) result <- left_join(result, .sample_tbl, by = ".cell")
   result
 }
 
@@ -361,6 +376,20 @@ annotation_label_transfer <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
+  # Capture any sample-level columns from the original object to propagate to output
+  .sample_col_nms <- {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      colnames(input_read_RNA_assay[[]])
+    else
+      colnames(colData(input_read_RNA_assay))
+  } |> str_subset("(?i)^sample")
+  .sample_tbl <- if (length(.sample_col_nms) > 0) {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+    else
+      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+  } else NULL
+
   # TEMPORARY FOR SOME REASON THE MIN COUNTS IS NOT 0 FOR SOME SAMPLES
   input_read_RNA_assay = check_if_assay_minimum_count_is_zero_and_correct_TEMPORARY(input_read_RNA_assay, assay)
   
@@ -481,6 +510,7 @@ annotation_label_transfer <- function(input_read_RNA_assay,
   if(nrow(data_annotated) <= 30 | is.null(reference_azimuth)){
   
     # If too little immune cells
+    if (!is.null(.sample_tbl)) data_annotated <- left_join(data_annotated, .sample_tbl, by = ".cell")
     return(data_annotated)
     #saveRDS(output_path)
     #output_path
@@ -568,9 +598,10 @@ annotation_label_transfer <- function(input_read_RNA_assay,
       })
     
     # Save
-    data_annotated  |>
-      left_join(azimuth_annotation, by = dplyr::join_by(.cell)	)
-    
+    result <- data_annotated  |>
+      left_join(azimuth_annotation, by = dplyr::join_by(.cell))
+    if (!is.null(.sample_tbl)) result <- left_join(result, .sample_tbl, by = ".cell")
+    result
 
   }
 }
@@ -639,6 +670,20 @@ alive_identification <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
+  # Capture any sample-level columns from the original object to propagate to output
+  .sample_col_nms <- {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      colnames(input_read_RNA_assay[[]])
+    else
+      colnames(colData(input_read_RNA_assay))
+  } |> str_subset("(?i)^sample")
+  .sample_tbl <- if (length(.sample_col_nms) > 0) {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+    else
+      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+  } else NULL
+
   if (!is.null(empty_droplets_tbl)) {
     input_read_RNA_assay =
       input_read_RNA_assay |>
@@ -829,12 +874,15 @@ alive_identification <- function(input_read_RNA_assay,
     unnest(data)
   
   # Merge
-  mitochondrion |>
+  result <- mitochondrion |>
     left_join(ribosome) |>
     mutate(alive = !high_mitochondrion) |> # & !high_ribosome ) |>
   # Select informative columns
     select(.cell, {{cell_type_column}}, contains("subsets"), contains("observation"),
            contains("high"), alive)
+  
+  if (!is.null(.sample_tbl)) result <- left_join(result, .sample_tbl, by = ".cell")
+  result
 }
 
 
@@ -875,7 +923,20 @@ doublet_identification <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
-  
+  # Capture any sample-level columns from the original object before conversion
+  .sample_col_nms <- {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      colnames(input_read_RNA_assay[[]])
+    else
+      colnames(colData(input_read_RNA_assay))
+  } |> str_subset("(?i)^sample")
+  .sample_tbl <- if (length(.sample_col_nms) > 0) {
+    if (inherits(input_read_RNA_assay, "Seurat"))
+      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+    else
+      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
+  } else NULL
+
   if (inherits(input_read_RNA_assay, "Seurat")) {
     input_read_RNA_assay <- input_read_RNA_assay |>
       Seurat::as.SingleCellExperiment() 
@@ -911,10 +972,13 @@ doublet_identification <- function(input_read_RNA_assay,
     }
   )
 
-  result |>
+  result <- result |>
     colData() |>
     as_tibble(rownames = ".cell") |>
     select(.cell, scDblFinder.class)
+  
+  if (!is.null(.sample_tbl)) result <- left_join(result, .sample_tbl, by = ".cell")
+  result
 
 }
 
