@@ -1,6 +1,42 @@
 ## quiets concerns of R CMD check re: the .'s that appear in pipelines
 if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 
+# Extract a tibble of .cell + all sample-level columns from a Seurat or SCE
+# object.  Returns NULL when no sample columns are found.
+.get_sample_tbl <- function(obj) {
+  if (inherits(obj, "Seurat")) {
+    col_nms  <- colnames(obj[[]])
+    sample_nms <- stringr::str_subset(col_nms, "(?i)^sample")
+    if (length(sample_nms) == 0L) return(NULL)
+    obj[[]] |> tibble::as_tibble(rownames = ".cell") |>
+      dplyr::select(.cell, dplyr::all_of(sample_nms))
+  } else {
+    col_nms  <- colnames(SummarizedExperiment::colData(obj))
+    sample_nms <- stringr::str_subset(col_nms, "(?i)^sample")
+    if (length(sample_nms) == 0L) return(NULL)
+    SummarizedExperiment::colData(obj) |>
+      tibble::as_tibble(rownames = ".cell") |>
+      dplyr::select(.cell, dplyr::all_of(sample_nms))
+  }
+}
+
+# Compute the join key vector (.cell + any sample-level columns present in
+# both lhs_obj metadata and rhs_tbl) to avoid .x/.y duplication.
+.sample_join_keys <- function(lhs_obj, rhs_tbl) {
+  lhs_cols <- tryCatch(
+    if (inherits(lhs_obj, "Seurat"))
+      colnames(lhs_obj[[]])
+    else
+      colnames(SummarizedExperiment::colData(lhs_obj)),
+    error = function(e) character(0)
+  )
+  shared <- intersect(
+    stringr::str_subset(lhs_cols, "(?i)^sample"),
+    colnames(rhs_tbl)
+  )
+  unique(c(".cell", shared))
+}
+
 #' Identify Empty Droplets in Single-Cell RNA-seq Data
 #'
 #' @description
@@ -267,19 +303,7 @@ empty_droplet_threshold<- function(input_read_RNA_assay,
       filter(ensembl_gene_id %in% rownames(input_read_RNA_assay)) |> pull(ensembl_gene_id)
   }
   
-  # Capture any sample-level columns to propagate to output
-  .sample_col_nms <- {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      colnames(input_read_RNA_assay[[]])
-    else
-      colnames(colData(input_read_RNA_assay))
-  } |> str_subset("(?i)^sample")
-  .sample_tbl <- if (length(.sample_col_nms) > 0) {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-    else
-      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-  } else NULL
+  .sample_tbl <- .get_sample_tbl(input_read_RNA_assay)
 
   # Get counts
   if (inherits(input_read_RNA_assay, "Seurat")) {
@@ -376,19 +400,7 @@ annotation_label_transfer <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
-  # Capture any sample-level columns from the original object to propagate to output
-  .sample_col_nms <- {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      colnames(input_read_RNA_assay[[]])
-    else
-      colnames(colData(input_read_RNA_assay))
-  } |> str_subset("(?i)^sample")
-  .sample_tbl <- if (length(.sample_col_nms) > 0) {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-    else
-      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-  } else NULL
+  .sample_tbl <- .get_sample_tbl(input_read_RNA_assay)
 
   # TEMPORARY FOR SOME REASON THE MIN COUNTS IS NOT 0 FOR SOME SAMPLES
   input_read_RNA_assay = check_if_assay_minimum_count_is_zero_and_correct_TEMPORARY(input_read_RNA_assay, assay)
@@ -670,19 +682,7 @@ alive_identification <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
-  # Capture any sample-level columns from the original object to propagate to output
-  .sample_col_nms <- {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      colnames(input_read_RNA_assay[[]])
-    else
-      colnames(colData(input_read_RNA_assay))
-  } |> str_subset("(?i)^sample")
-  .sample_tbl <- if (length(.sample_col_nms) > 0) {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-    else
-      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-  } else NULL
+  .sample_tbl <- .get_sample_tbl(input_read_RNA_assay)
 
   if (!is.null(empty_droplets_tbl)) {
     input_read_RNA_assay =
@@ -923,19 +923,7 @@ doublet_identification <- function(input_read_RNA_assay,
   # Get assay
   if(is.null(assay)) assay = input_read_RNA_assay@assays |> names() |> extract2(1)
   
-  # Capture any sample-level columns from the original object before conversion
-  .sample_col_nms <- {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      colnames(input_read_RNA_assay[[]])
-    else
-      colnames(colData(input_read_RNA_assay))
-  } |> str_subset("(?i)^sample")
-  .sample_tbl <- if (length(.sample_col_nms) > 0) {
-    if (inherits(input_read_RNA_assay, "Seurat"))
-      input_read_RNA_assay[[]] |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-    else
-      colData(input_read_RNA_assay) |> as_tibble(rownames = ".cell") |> select(.cell, all_of(.sample_col_nms))
-  } else NULL
+  .sample_tbl <- .get_sample_tbl(input_read_RNA_assay)
 
   if (inherits(input_read_RNA_assay, "Seurat")) {
     input_read_RNA_assay <- input_read_RNA_assay |>
@@ -1878,11 +1866,11 @@ preprocessing_output <- function(input_read_RNA_assay,
   high_ribosome <- NULL
   scDblFinder.class <- NULL
   predicted.celltype.l2 <- NULL
-  
+
   if (empty_droplets_tbl |> is.null() |> not()) {
     input_read_RNA_assay =
       input_read_RNA_assay |>
-      left_join(empty_droplets_tbl, by = ".cell") |>
+      left_join(empty_droplets_tbl, by = .sample_join_keys(input_read_RNA_assay, empty_droplets_tbl)) |>
       filter(!empty_droplet)
   } 
   
@@ -1902,34 +1890,36 @@ preprocessing_output <- function(input_read_RNA_assay,
   }
   
   # Filtering dead
-  if(alive_identification_tbl |> is.null() |> not())
+  if(alive_identification_tbl |> is.null() |> not()) {
+    .alive_keys <- .sample_join_keys(input_read_RNA_assay, alive_identification_tbl)
     input_read_RNA_assay = input_read_RNA_assay |>
-    left_join(alive_identification_tbl |> select(.cell, alive), by = ".cell") |>
-    filter(alive) 
-  
-  
+      left_join(alive_identification_tbl |> select(all_of(.alive_keys), alive), by = .alive_keys) |>
+      filter(alive)
+  }
   
   # Filter doublets
-  if(doublet_identification_tbl |> is.null() |> not())
+  if(doublet_identification_tbl |> is.null() |> not()) {
+    .dbl_keys <- .sample_join_keys(input_read_RNA_assay, doublet_identification_tbl)
     input_read_RNA_assay <- input_read_RNA_assay |>
-    left_join(doublet_identification_tbl |> select(.cell, scDblFinder.class), by = ".cell") |>
-    filter(scDblFinder.class!="doublet") 
+      left_join(doublet_identification_tbl |> select(all_of(.dbl_keys), scDblFinder.class), by = .dbl_keys) |>
+      filter(scDblFinder.class!="doublet")
+  }
   
   # attach cell cycle
   if(cell_cycle_score_tbl |> is.null() |> not())
     input_read_RNA_assay = 
     input_read_RNA_assay |>
     left_join(
-      cell_cycle_score_tbl ,
-      by=".cell"
+      cell_cycle_score_tbl,
+      by = .sample_join_keys(input_read_RNA_assay, cell_cycle_score_tbl)
     )
   
   # Attach annotation
   try({
       if (inherits(annotation_label_transfer_tbl, "tbl_df") && nrow(annotation_label_transfer_tbl) > 0){
         input_read_RNA_assay <- input_read_RNA_assay |>
-          left_join(annotation_label_transfer_tbl, by = ".cell") |>
-          left_join(cell_type_ensembl_harmonised_tbl)
+          left_join(annotation_label_transfer_tbl, by = .sample_join_keys(input_read_RNA_assay, annotation_label_transfer_tbl)) |>
+          left_join(cell_type_ensembl_harmonised_tbl, by = .sample_join_keys(input_read_RNA_assay, cell_type_ensembl_harmonised_tbl))
         
         # Replace NA annotation column with "other", as annotations are single-cell level, not related to pseudobulk
         annotation_columns <- c("blueprint_first.labels.fine",  "blueprint_first.labels.coarse",

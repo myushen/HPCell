@@ -100,8 +100,21 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
   # get cell_metadata
   try({
     if (inherits(annotation_label_transfer_tbl, "tbl_df")){
+      # Derive colnames of the assay metadata
+      .assay_col_nms <- if (inherits(input_read_RNA_assay, "Seurat"))
+        colnames(input_read_RNA_assay[[]])
+      else
+        colnames(SummarizedExperiment::colData(input_read_RNA_assay))
+      # Join on .cell plus any shared sample-level columns
+      .join_by_nms <- c(
+        ".cell",
+        intersect(
+          stringr::str_subset(c(.assay_col_nms, ".cell"), "(?i)^sample"),
+          colnames(annotation_label_transfer_tbl)
+        )
+      ) |> unique()
       input_read_RNA_assay <- input_read_RNA_assay |>
-        left_join(annotation_label_transfer_tbl, by = ".cell")
+        left_join(annotation_label_transfer_tbl, by = .join_by_nms)
     }
   }, silent = TRUE)
   
