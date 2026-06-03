@@ -687,7 +687,7 @@ alive_identification <- function(input_read_RNA_assay,
   if (!is.null(empty_droplets_tbl)) {
     input_read_RNA_assay =
       input_read_RNA_assay |>
-      left_join(empty_droplets_tbl, by=".cell") |>
+      left_join(empty_droplets_tbl, by = .sample_join_keys(input_read_RNA_assay, empty_droplets_tbl)) |>
       dplyr::filter(!empty_droplet)
   } 
   
@@ -1041,7 +1041,7 @@ cell_cycle_scoring <- function(input_read_RNA_assay,
   # avoid small number of cells 
   if (!is.null(empty_droplets_tbl)) {
     filtered_counts <- input_read_RNA_assay |>
-      left_join(empty_droplets_tbl, by = ".cell") |>
+      left_join(empty_droplets_tbl, by = .sample_join_keys(input_read_RNA_assay, empty_droplets_tbl)) |>
       dplyr::filter(!empty_droplet)
   } 
   
@@ -1113,7 +1113,7 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
   # avoid small number of cells 
   if (!is.null(empty_droplets_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |>
-      left_join(empty_droplets_tbl, by = ".cell") |>
+      left_join(empty_droplets_tbl, by = .sample_join_keys(input_read_RNA_assay, empty_droplets_tbl)) |>
       dplyr::filter(!empty_droplet)
   } 
   
@@ -1122,8 +1122,8 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
     input_read_RNA_assay =
       input_read_RNA_assay |>
       left_join(
-        alive_identification_tbl ,
-        by=".cell"
+        alive_identification_tbl,
+        by = .sample_join_keys(input_read_RNA_assay, alive_identification_tbl)
       ) |> dplyr::filter(alive) 
   }
   
@@ -1132,18 +1132,18 @@ non_batch_variation_removal <- function(input_read_RNA_assay,
     input_read_RNA_assay =
       input_read_RNA_assay |>
       left_join(
-        doublet_identification_tbl ,
-        by=".cell"
+        doublet_identification_tbl,
+        by = .sample_join_keys(input_read_RNA_assay, doublet_identification_tbl)
       ) |> dplyr::filter(scDblFinder.class != "doublet") 
   }
   
   if(!is.null(cell_cycle_score_tbl)) {
+    .cc_keys <- .sample_join_keys(input_read_RNA_assay, cell_cycle_score_tbl)
     input_read_RNA_assay = input_read_RNA_assay |>
-      
       left_join(
         cell_cycle_score_tbl |>
-          select(.cell, any_of(factors_to_regress)),
-        by=".cell"
+          select(all_of(.cc_keys), any_of(factors_to_regress)),
+        by = .cc_keys
       )
   }
   
@@ -1771,7 +1771,7 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
   # avoid small number of cells 
   if (!is.null(empty_droplets_tbl)) {
     sample_sce <- sample_sce |>
-      left_join(empty_droplets_tbl, by = ".cell") |>
+      left_join(empty_droplets_tbl, by = .sample_join_keys(sample_sce, empty_droplets_tbl)) |>
       dplyr::filter(!empty_droplet)
   } 
   
@@ -1780,8 +1780,8 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
     sample_sce =
       sample_sce |>
       left_join(
-        alive_identification_tbl ,
-        by=".cell"
+        alive_identification_tbl,
+        by = .sample_join_keys(sample_sce, alive_identification_tbl)
       ) |> dplyr::filter(alive) 
   }
   
@@ -1790,8 +1790,8 @@ split_sample_cell_type_calculate_metacell_membership <- function(sample_sce,
     sample_sce =
       sample_sce |>
       left_join(
-        doublet_identification_tbl ,
-        by=".cell"
+        doublet_identification_tbl,
+        by = .sample_join_keys(sample_sce, doublet_identification_tbl)
       ) |> dplyr::filter(scDblFinder.class != "doublet") 
   }
   
@@ -2309,7 +2309,7 @@ cell_communication <- function(input_read_RNA_assay,
   # Avoid small number of cells 
   if (!is.null(empty_droplets_tbl)) {
     input_read_RNA_assay <- input_read_RNA_assay |>
-      left_join(empty_droplets_tbl, by = ".cell") |>
+      left_join(empty_droplets_tbl, by = .sample_join_keys(input_read_RNA_assay, empty_droplets_tbl)) |>
       dplyr::filter(!empty_droplet)
   } 
   
