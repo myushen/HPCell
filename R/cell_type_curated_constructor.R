@@ -127,6 +127,9 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
       ) 
   }
   
+  # Detect any column starting with "sample" (case-insensitive) to preserve through selects
+  .sample_col_nms <- colnames(input_read_RNA_assay) |> stringr::str_subset("(?i)^sample")
+
   # Sometimes, sce does not have azimuth annotation
   input_read_RNA_assay <- input_read_RNA_assay |> 
     mutate(azimuth_predicted_celltype_l2 = ifelse(!("azimuth_predicted.celltype.l2" %in% names(input_read_RNA_assay)),
@@ -134,13 +137,13 @@ cell_type_ensembl_harmonised <- function(input_read_RNA_assay,
                                                   azimuth_predicted.celltype.l2)) |>
     unnest(blueprint_scores_fine) |> 
     select(.cell, any_of(c("observation_joinid", "observation_originalid",
-           "donor_id", "dataset_id", "sample_id", "cell_type")),
+           "donor_id", "dataset_id", .sample_col_nms, "cell_type")),
            blueprint_first_labels_fine, monaco_first_labels_fine, 
            blueprint_first_labels_coarse, monaco_first_labels_coarse,
            any_of("azimuth_predicted_celltype_l2"), monaco_scores_fine, contains("macro"), contains("CD4") ) |> 
     unnest(monaco_scores_fine) |> 
     select(.cell, any_of(c("observation_joinid", "observation_originalid",
-                           "donor_id", "dataset_id", "sample_id", "cell_type")),
+                           "donor_id", "dataset_id", .sample_col_nms, "cell_type")),
            blueprint_first_labels_fine, monaco_first_labels_fine, 
            blueprint_first_labels_coarse, monaco_first_labels_coarse,
            any_of("azimuth_predicted_celltype_l2"), contains("macro") , contains("CD4"), contains("helper"), contains("Th"))
