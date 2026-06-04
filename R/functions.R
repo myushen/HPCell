@@ -528,7 +528,7 @@ annotation_label_transfer <- function(input_read_RNA_assay,
     #output_path
     
   } else if (!is.null(reference_azimuth)) {
-
+    library(Seurat) # Azimuth failed to run without loading Seurat here
     if (!requireNamespace("Azimuth", quietly = TRUE))
       stop("Package 'Azimuth' is required for reference-based annotation. ",
            "Install it with: remotes::install_github('satijalab/azimuth@master')")
