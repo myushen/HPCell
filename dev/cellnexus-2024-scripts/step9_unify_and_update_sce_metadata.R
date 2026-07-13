@@ -330,7 +330,7 @@ job::job({
         SELECT {DBI::SQL(select_cellnexus)}
         FROM metadata
       )
-      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.2.3.0.parquet'))}
+      TO {DBI::dbQuoteString(con, file.path(out_dir, 'hca2024_v2.3.0.parquet'))}
       (FORMAT PARQUET, COMPRESSION 'brotli');
       "
     )

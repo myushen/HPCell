@@ -323,7 +323,7 @@ job::job({
         SELECT {DBI::SQL(select_cellnexus)}
         FROM metadata
       )
-      TO {DBI::dbQuoteString(con, file.path(out_dir, 'cellnexus_metadata.v2025.1.0.0.parquet'))}
+      TO {DBI::dbQuoteString(con, file.path(out_dir, 'hca2025_v1.0.0.parquet'))}
       (FORMAT PARQUET, COMPRESSION 'brotli');
       "
     )
@@ -345,22 +345,22 @@ job::job({
     ),
     cols
   )
-  select_census <- paste(sql_id(census_cols), collapse = ", ")
-  
-  # MODIFY HERE: output census metadata parquet path
-  DBI::dbExecute(
-    con,
-    glue::glue(
-      "
-    COPY (
-      SELECT {DBI::SQL(select_census)}
-      FROM metadata
-    )
-    TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.v2025.1.0.0.parquet'))}
-    (FORMAT PARQUET, COMPRESSION 'brotli');
-    "
-    )
-  )
+  # select_census <- paste(sql_id(census_cols), collapse = ", ")
+  # 
+  # # MODIFY HERE: output census metadata parquet path
+  # DBI::dbExecute(
+  #   con,
+  #   glue::glue(
+  #     "
+  #   COPY (
+  #     SELECT {DBI::SQL(select_census)}
+  #     FROM metadata
+  #   )
+  #   TO {DBI::dbQuoteString(con, file.path(out_dir, 'census_cell_metadata.v2025.1.0.0.parquet'))}
+  #   (FORMAT PARQUET, COMPRESSION 'brotli');
+  #   "
+  #   )
+  # )
   
   # # Metacell metadata subset
   # metacell_cols <- unique(c("cell_id", "sample_id", "dataset_id", cols[grepl("metacell", cols)]))
