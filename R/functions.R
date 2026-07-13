@@ -736,7 +736,6 @@ alive_identification <- function(input_read_RNA_assay,
       column = "SEQNAME",
       keytype = if (feature_nomenclature == "symbol") "SYMBOL" else "GENEID"
     )
-  }
   
   which_mito = which(location == "MT")
   
