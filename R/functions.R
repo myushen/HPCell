@@ -730,17 +730,15 @@ alive_identification <- function(input_read_RNA_assay,
   
   # Returns a named vector of IDs
   # Matches the gene id's row by row and inserts NA when it can't find gene names
-  if (feature_nomenclature == "symbol") {
-    location <- mapIds(
+  location <- mapIds(
       EnsDb.Hsapiens.v86,
-      keys=rownames(input_read_RNA_assay),
-      column="SEQNAME",
-      keytype="SYMBOL"
+      keys = rownames(input_read_RNA_assay),
+      column = "SEQNAME",
+      keytype = if (feature_nomenclature == "symbol") "SYMBOL" else "GENEID"
     )
   }
   
-  
-  which_mito = rownames(input_read_RNA_assay) |> str_which("^MT")
+  which_mito = which(location == "MT")
   
   # mitochondrion =
   #   input_read_RNA_assay |>
