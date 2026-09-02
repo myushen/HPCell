@@ -2,17 +2,17 @@
 #'
 #' @description
 #' Adds a custom per-cell assay transformation step to the HPCell pipeline.
-#' The transformation function (e.g. log1p, identity) is applied to each
-#' sample's count matrix, optionally capping values at a maximum scale.
+#' The caller declares one of `identity`, `expm1`, or `safe_expm1` per sample.
+#' `identity` does not scale; `expm1` and `safe_expm1` cap at `scale_max`.
 #'
 #' @param input_hpc An `HPCell` object.
-#' @param fx A list of transformation functions (one per sample) to apply to
-#'   the assay matrix. Defaults to `identity` for all samples.
+#' @param fx A list of per-sample transformation methods, already chosen
+#'   outside HPCell: `"safe_expm1"`, `"expm1"`, or `"identity"`.
 #' @param target_input Name of the targets target providing the data object.
 #' @param target_output Name of the targets target to write the transformed
 #'   data to.
-#' @param scale_max A list of numeric upper-bound values (one per sample)
-#'   passed to `limit_max_to_scale()`. Default: `10` per sample.
+#' @param scale_max A list of numeric upper bounds (one per sample) used by
+#'   `expm1` and `safe_expm1`. Ignored for `identity`. Default: `10` per sample.
 #' @param ... Additional arguments (unused; for method dispatch).
 #' @return The updated `HPCell` object with the transformation step appended.
 #' @export
@@ -74,6 +74,63 @@ transform_assay.HPCell = function(
   
 }
 
+#' Infer the approximate counts distribution of a sample
+#'
+#' Decision tree used to infer Census sample distribution and to classify each sample's
+#' expression assay before choosing an HPCell transform
+#' (`safe_expm1`, `expm1`, or `identity`).
+#'
+#' Required columns: `has_negative`, `all_integer`, `counts_gap_min_mean`,
+#' `positive_mode`, and either `is_gene_expression_likely_log`, `has_rounding_error`
+#'
+#' @param df A data frame of per-sample count metrics.
+#' @param counts_gap_threshold Minimum positive-count gap (min/mean) that
+#'   distinguishes double-log from single-log data. Default: `0.25`.
+#' @param pos_mode_threshold Positive-count mode must exceed this value (together
+#'   with the gap threshold) to call `double_log1p`. Default: `1`.
+#'
+#' @return `df` with an `inferred_distribution` column. Possible values:
+#'   `double_log1p`, `log1p`, `raw_scaled`, `raw`, `log1p_negative_max_10`,
+#'   `raw_negative_scaled`, or `NA` when no rule matches.
+#' @importFrom rlang .data
+#' @export
+impute_x_approximate_distribution <- function(df,
+                                              counts_gap_threshold,
+                                              pos_mode_threshold) {
+  df |>
+    dplyr::mutate(
+      inferred_distribution = dplyr::case_when(
+        
+        # 0) When counts gap between 0 and next min value >= threshold
+        !has_negative & is_gene_expression_likely_log & !all_integer & !has_rounding_error &
+          (counts_gap_min_mean >= counts_gap_threshold) & (positive_mode > pos_mode_threshold) ~ "double_log1p",
+        
+        # 1) Small counts gap
+        !has_negative & is_gene_expression_likely_log & !all_integer & !has_rounding_error &
+          !(
+            (counts_gap_min_mean >= counts_gap_threshold) &
+              (positive_mode > pos_mode_threshold)
+            
+          ) ~ "log1p",
+        
+        # 2) No negatives, has large values
+        !has_negative & !is_gene_expression_likely_log & !all_integer & !has_rounding_error ~ "raw_scaled",
+        
+        # 3) Large values, integer counts
+        !has_negative & !is_gene_expression_likely_log & all_integer & !has_rounding_error ~ "raw",
+        
+        # 4) Has negatives, compressed range
+        has_negative & is_gene_expression_likely_log & !all_integer & !has_rounding_error ~ "log1p_negative_max_10",
+        
+        # 5) Has negatives and large values
+        has_negative & !is_gene_expression_likely_log & !all_integer & !has_rounding_error ~ "raw_negative_scaled",
+        
+        # fallback
+        TRUE ~ NA_character_
+      )
+    )
+}
+
 #' Limit Maximum Value of Counts by Scaling
 #'
 #' Scales a numeric vector down so that its maximum value does not exceed
@@ -106,6 +163,8 @@ limit_max_to_scale <- function(counts, scale_max) {
 #' The transformation pipeline is:
 #' \deqn{counts \rightarrow \text{scale} \rightarrow expm1 \rightarrow \text{scale} \rightarrow expm1}
 #'
+#'#' Declared outside HPCell for case 0 (large gap / double log1p).
+#'
 #' @param counts A numeric vector of count values to be transformed.
 #' @param scale_max A numeric scalar passed to \code{\link{limit_max_to_scale}}
 #'   specifying the upper bound applied before each \code{expm1} step.
@@ -119,37 +178,40 @@ safe_expm1 <- function(counts, scale_max) {
   counts
 }
 
-#' Identity Transformation with Maximum Value Scaling
-#'
-#' Scales a numeric vector so that its maximum does not exceed \code{scale_max}
-#' before returning it unchanged via \code{\link[base]{identity}}. This is
-#' useful when no mathematical transformation is desired but the counts still
-#' need to be bounded for downstream stability.
-#'
-#' @param counts A numeric vector of count values to be scaled.
-#' @param scale_max A numeric scalar specifying the upper bound for the maximum
-#'   value of \code{counts}. Passed directly to \code{\link{limit_max_to_scale}}.
-#'
-#' @return A numeric vector of the same length as \code{counts}, with all
-#'   values scaled so that the maximum does not exceed \code{scale_max}.
-#' @seealso \code{\link{limit_max_to_scale}}, \code{\link{safe_expm1}}
-#' @export
-identity_with_max_limit <- function(counts, scale_max) {
-  counts <- counts |> limit_max_to_scale(scale_max) |> identity()
-  counts
+# Caller-declared methods from outside HPCell:
+# identity  — raw / integer, no scaling
+# expm1     — scale to scale_max then inverse log1p
+# safe_expm1 — scale → expm1 → scale → expm1
+apply_declared_transform <- function(counts, transform_fx, scale_max) {
+  fx <- match.fun(transform_fx)
+  if (identical(fx, identity)) {
+    fx(counts)
+  } else if (identical(fx, expm1)) {
+    fx(limit_max_to_scale(counts, scale_max))
+  } else if (identical(fx, safe_expm1)) {
+    fx(counts, scale_max)
+  } else {
+    stop(
+      "Unsupported transform_fx '", deparse(substitute(transform_fx)), "'. ",
+      "Inspect further"
+    )
+  }
 }
 
 #' Apply a transformation to an assay and save as HDF5
 #'
-#' This function applies a specified transformation to the assay of a 
-#' SummarizedExperiment object and saves the transformed object in HDF5 format.
+#' This function applies a caller-declared transformation (`identity`, `expm1`,
+#' or `safe_expm1`) to the assay of a SummarizedExperiment object and saves
+#' the transformed object.
 #'
 #' @param input_read_RNA_assay A SummarizedExperiment object to be transformed.
-#' @param transform_fx A function to apply to the assay of the SummarizedExperiment object.
+#' @param transform_fx A caller-declared method: `"identity"` (raw, no
+#'   scaling), `"expm1"` (scale to `scale_max` then expm1), or `"safe_expm1"`
+#'   (scale → expm1 → scale → expm1).
 #' @param external_path A character string specifying the directory path to save the transformed object.
 #' @param container_type A character vector specifying the output file type. Ideally it should match to the input file type.
-#' @param scale_max An integer specifying the allowed max count value. It is used to define 
-#'     scaling factor in the process of transformation.  
+#' @param scale_max Upper bound for `limit_max_to_scale()`. Used by `expm1`
+#'   and `safe_expm1`; ignored for `identity`.
 #' @return The function does not return an object. It saves the transformed SummarizedExperiment object to the specified path.
 #'
 #' @importFrom SummarizedExperiment assay
@@ -204,17 +266,7 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   # Convert transform_method to a function if it is a character string
   transform_function <- match.fun(transform_fx)
   
-  # Scale counts to a maximum of 20 to avoid downstream failures.  
-  # This Check needs ~13Gb to run for 5000+ cell datasets
-  # Check if the transformation method is not 'identity' and counts exceed counts upper bound
-  # Scale for other transform function is handled internally in `transform_function`
-  if (identical(transform_function, identity) || identical(transform_function, expm1)) {
-    counts <- limit_max_to_scale(counts, scale_max)
-    counts <- transform_function(counts)
-  } else {
-    # identity_with_max_limit and safe_expm1 handle scale_max internally
-    counts <- transform_function(counts, scale_max)
-  }
+  counts <- apply_declared_transform(counts, transform_fx, scale_max)
   
   # Clear memory
   gc()

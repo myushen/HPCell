@@ -26,6 +26,8 @@ transformation numerically stable for large count values.
 \details{
 The transformation pipeline is:
 \deqn{counts \rightarrow \text{scale} \rightarrow expm1 \rightarrow \text{scale} \rightarrow expm1}
+
+#' Declared outside HPCell for case 0 (large gap / double log1p).
 }
 \seealso{
 \code{\link{expm1}}, \code{\link{limit_max_to_scale}}

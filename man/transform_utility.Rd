@@ -15,19 +15,22 @@ transform_utility(
 \arguments{
 \item{input_read_RNA_assay}{A SummarizedExperiment object to be transformed.}
 
-\item{transform_fx}{A function to apply to the assay of the SummarizedExperiment object.}
+\item{transform_fx}{A caller-declared method: \code{"identity"} (raw, no
+scaling), \code{"expm1"} (scale to \code{scale_max} then expm1), or \code{"safe_expm1"}
+(scale → expm1 → scale → expm1).}
 
 \item{external_path}{A character string specifying the directory path to save the transformed object.}
 
 \item{container_type}{A character vector specifying the output file type. Ideally it should match to the input file type.}
 
-\item{scale_max}{An integer specifying the allowed max count value. It is used to define
-scaling factor in the process of transformation.}
+\item{scale_max}{Upper bound for \code{limit_max_to_scale()}. Used by \code{expm1}
+and \code{safe_expm1}; ignored for \code{identity}.}
 }
 \value{
 The function does not return an object. It saves the transformed SummarizedExperiment object to the specified path.
 }
 \description{
-This function applies a specified transformation to the assay of a
-SummarizedExperiment object and saves the transformed object in HDF5 format.
+This function applies a caller-declared transformation (\code{identity}, \code{expm1},
+or \code{safe_expm1}) to the assay of a SummarizedExperiment object and saves
+the transformed object.
 }
