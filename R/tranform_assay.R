@@ -233,15 +233,9 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   
   if(ncol(input_read_RNA_assay) == 0) return(NULL)
   
-  # Rename assay to "X" for consistency; warn if the original name differs
-  if (length(names(assays(input_read_RNA_assay))) == 1 &&
-      names(assays(input_read_RNA_assay)) != "X") {
-    warning(sprintf(
-      "Input assay is named '%s', not 'X'. Renaming to 'X' for downstream consistency.",
-      names(assays(input_read_RNA_assay))
-    ))
-    names(assays(input_read_RNA_assay)) <- "X"
-  }
+  # Rename assay names to for consistency
+  if (length(names(assays(input_read_RNA_assay))) == 1 && 
+      names(assays(input_read_RNA_assay)) != "X") names(assays(input_read_RNA_assay)) <- "X"
   
   # strip metadata that we don't need
   input_read_RNA_assay =
@@ -263,11 +257,11 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   
   dir.create(external_path, showWarnings = FALSE, recursive = TRUE)
   
-  # Always use "X" as the canonical assay name regardless of the input assay name
-  assay_name <- "X"
+  # Get the name of the first assay in the data object
+  assay_name <- names(assays(input_read_RNA_assay))[1]
   
-  # Extract the counts matrix from the first assay of the input
-  counts <- assay(input_read_RNA_assay)
+  # Extract the counts matrix from the assay
+  counts <- assay(input_read_RNA_assay, assay_name)
   
   # Convert transform_method to a function if it is a character string
   transform_function <- match.fun(transform_fx)
@@ -328,7 +322,7 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   
   # Rebuild the SCE to stay light, and to set the assay with the right name
   input_read_RNA_assay = SingleCellExperiment(
-    assays = setNames(list(input_read_RNA_assay |> assay()), assay_name), 
+    assays = list(X = input_read_RNA_assay |> assay() ), 
     colData = colData(input_read_RNA_assay)
   )
   
