@@ -90,7 +90,7 @@ transform_assay.HPCell = function(
 #'   with the gap threshold) to call `double_log1p`. Default: `1`.
 #'
 #' @return `df` with an `inferred_distribution` column. Possible values:
-#'   `double_log1p`, `log1p`, `raw_scaled`, `raw`, `log1p_negative_max_10`,
+#'   `double_log1p`, `log1p`, `raw_scaled`, `raw`, `log_negative_max_10`,
 #'   `raw_negative_scaled`, or `NA` when no rule matches.
 #' @importFrom rlang .data
 #' @export
@@ -120,7 +120,7 @@ impute_x_approximate_distribution <- function(df,
         !has_negative & !is_gene_expression_likely_log & all_integer & !has_rounding_error ~ "raw",
         
         # 4) Has negatives, compressed range
-        has_negative & is_gene_expression_likely_log & !all_integer & !has_rounding_error ~ "log1p_negative_max_10",
+        has_negative & is_gene_expression_likely_log & !all_integer & !has_rounding_error ~ "log_negative_max_10",
         
         # 5) Has negatives and large values
         has_negative & !is_gene_expression_likely_log & !all_integer & !has_rounding_error ~ "raw_negative_scaled",
@@ -180,13 +180,14 @@ safe_expm1 <- function(counts, scale_max) {
 
 # Caller-declared methods from outside HPCell:
 # identity  — raw / integer, no scaling
-# expm1     — scale to scale_max then inverse log1p
+# expm1     — if max_val > 10, scale to scale_max then inverse log1p
+# exp       — if max_val > 10, scale to scale_max then inverse log1p
 # safe_expm1 — scale → expm1 → scale → expm1
 apply_declared_transform <- function(counts, transform_fx, scale_max) {
   fx <- match.fun(transform_fx)
   if (identical(fx, identity)) {
     fx(counts)
-  } else if (identical(fx, expm1)) {
+  } else if (identical(fx, expm1) || identical(fx, exp)) {
     fx(limit_max_to_scale(counts, scale_max))
   } else if (identical(fx, safe_expm1)) {
     fx(counts, scale_max)
@@ -196,6 +197,56 @@ apply_declared_transform <- function(counts, transform_fx, scale_max) {
       "Inspect further"
     )
   }
+}
+
+# Helper to handle extreme rounding error after transformation(e.g 10.00001, 49.99992)
+#'
+#' After back-transformations such as \code{expm1}, limited-precision storage
+#' (e.g. float32 h5ad files) can leave counts as near-integers
+#' (e.g. \code{45.99999} instead of \code{46}).  This function inspects a
+#' lightweight column-sample of the matrix and, when \emph{all} non-integer
+#' values are within \code{snap_tol} of an integer, rounds the full matrix to
+#' the minimum decimal precision that snaps them to exact integers.  If any
+#' non-integer value is genuinely far from an integer (e.g. a scaled
+#' \code{expm1} output like \code{0.41}), the matrix is returned unchanged.
+#'
+#' @param counts A matrix or DelayedMatrix of count values to potentially snap.
+#' @param counts_light A dense subsample of \code{counts} already in memory
+#'   (e.g. \code{counts_light_for_checks}).  Used only to estimate error
+#'   magnitude; the full \code{counts} matrix is rounded.
+#' @param snap_tol Maximum distance from the nearest integer below which a
+#'   non-integer value is treated as a floating-point artefact.
+#'   Default \code{0.01} covers float32 \code{expm1} residuals (~9e-5) while
+#'   excluding genuine non-integers (e.g. \code{0.4}).
+#'
+#' @return \code{counts}, rounded to the minimum decimal precision that snaps
+#'   near-integer artefacts to exact integers, or unchanged if no snapping is
+#'   appropriate.
+#' @export
+snap_near_integer_floats <- function(counts, counts_light, snap_tol = 0.001) {
+  v       <- as.numeric(counts_light)
+  v       <- v[!is.na(v) & is.finite(v)]
+  non_int <- v[v != floor(v)]
+  
+  # Already all integers — nothing to do
+  if (length(non_int) == 0L) return(counts)
+  
+  errors <- abs(non_int - round(non_int))
+  
+  # Any value far from an integer is a genuine non-integer (e.g. scaled expm1):
+  # do not snap
+  if (!all(errors < snap_tol)) return(counts)
+  
+  max_error <- max(errors)
+  if (max_error == 0) return(counts)
+  
+  # Largest n such that round(x, n) guarantees snapping to nearest integer:
+  #   round(x, n) snaps  iff  |x - nearest_int| < 0.5 * 10^{-n}
+  #   => n < -log10(2 * max_error)  =>  n = floor(-log10(2 * max_error))
+  n_decimals <- floor(-log10(2 * max_error))
+  n_decimals <- max(0L, min(n_decimals, 10L))
+  
+  round(counts, n_decimals)
 }
 
 #' Apply a transformation to an assay and save as HDF5
@@ -285,7 +336,7 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   mode_value <- density_est$x[which.max(density_est$y)]
   
   # If the mode value is negative, shift counts to make the mode zero
-  if (mode_value < 0) {
+  if (min(counts_light_for_checks) < 0 && mode_value < 0 ) {
     counts <- counts + abs(mode_value)
     counts_light_for_checks = counts_light_for_checks + abs(mode_value)
   }
@@ -307,6 +358,11 @@ transform_utility  = function(input_read_RNA_assay, transform_fx,
   if (min(counts_light_for_checks) < 0) {
     counts[counts < 0] <- 0
   }
+  
+  # Snap near-integer floating-point artefacts to exact integers.
+  # e.g. samples after transformation produces residuals of 1e-5 to
+  # 9e-5 that survive round(counts, 5) but trigger flag_rounding_error.
+  counts <- snap_near_integer_floats(counts, counts_light_for_checks)
   
   # Clear memory
   gc()

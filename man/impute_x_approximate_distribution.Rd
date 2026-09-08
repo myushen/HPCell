@@ -17,7 +17,7 @@ with the gap threshold) to call \code{double_log1p}. Default: \code{1}.}
 }
 \value{
 \code{df} with an \code{inferred_distribution} column. Possible values:
-\code{double_log1p}, \code{log1p}, \code{raw_scaled}, \code{raw}, \code{log1p_negative_max_10},
+\code{double_log1p}, \code{log1p}, \code{raw_scaled}, \code{raw}, \code{log_negative_max_10},
 \code{raw_negative_scaled}, or \code{NA} when no rule matches.
 }
 \description{

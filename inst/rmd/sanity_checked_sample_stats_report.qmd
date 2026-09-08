@@ -1,0 +1,133 @@
+---
+title: "Transform Sanity-Check Report"
+format:
+  html:
+    theme: minty
+    title-block-banner: true
+    df-print: paged
+    embed-resources: true
+    toc: true
+    toc-depth: 2
+    toc-location: left
+    number-sections: true
+    smooth-scroll: true
+abstract: >
+  Per-sample count-range sanity checks applied after `transform_assay`.
+  Three binary flags are evaluated for each sample: maximum count < 10,
+  minimum count < 0, and majority of non-zero counts being non-integer.
+knitr:
+  opts_chunk:
+    message: false
+    warning: false
+    echo: false
+params:
+  sanity_check_tbl: "NA"
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tibble)
+library(purrr)
+library(DT)
+library(targets)
+
+#sanity_check_tbl <- params[1]$sanity_check_tbl
+sanity_check_tbl <- tar_read(sanity_checked_sample_stats_combined, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_updated_samples_transform_hpcell_target_store_v1"
+                     )
+
+sanity_check_cols <- c("sanity_check_max_lt_10", "sanity_check_min_lt_0", "sanity_check_rounding_error")
+
+sanity_check_labels <- c(
+  sanity_check_max_lt_10      = "Maximum count < 10",
+  sanity_check_min_lt_0       = "Minimum count < 0",
+  sanity_check_rounding_error = "Rounding error (<1e-4)"
+)
+```
+
+## Overview
+
+```{r summary-table}
+n_total <- nrow(sanity_check_tbl)
+
+sanity_check_tbl |>
+  summarise(across(all_of(sanity_check_cols), sum)) |>
+  pivot_longer(everything(), names_to = "flag", values_to = "n_flagged") |>
+  mutate(
+    Flag          = recode(flag, !!!sanity_check_labels),
+    `Flagged (n)` = n_flagged,
+    `Clean (n)`   = n_total - n_flagged
+  ) |>
+  select(Flag, `Flagged (n)`, `Clean (n)`) |>
+  DT::datatable(rownames = FALSE, options = list(dom = "t", ordering = TRUE))
+```
+
+## Flag Counts per Category
+
+How many samples carry each individual flag.
+
+```{r flag-bar, fig.height=4, fig.width=6}
+sanity_check_tbl |>
+  summarise(across(all_of(sanity_check_cols), sum)) |>
+  pivot_longer(everything(), names_to = "flag", values_to = "n_flagged") |>
+  mutate(flag = recode(flag, !!!sanity_check_labels)) |>
+  ggplot(aes(x = reorder(flag, -n_flagged), y = n_flagged, fill = flag)) +
+  geom_col(show.legend = FALSE, width = 0.6) +
+  geom_text(aes(label = n_flagged), vjust = -0.4, size = 3) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = NULL, y = "Number of samples", title = "Samples flagged per check") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+## Flag Co-occurrence
+
+Number of flags carried simultaneously per sample.
+
+```{r flag-combo, fig.height=4, fig.width=5}
+sanity_check_tbl |>
+  mutate(n_flags = rowSums(across(all_of(sanity_check_cols)))) |>
+  count(n_flags) |>
+  ggplot(aes(x = factor(n_flags), y = n, fill = factor(n_flags))) +
+  geom_col(show.legend = FALSE, width = 0.5) +
+  geom_text(aes(label = n), vjust = -0.4, size = 3.5) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(x = "Number of flags", y = "Number of samples",
+       title = "Flag co-occurrence") +
+  theme_minimal(base_size = 12)
+```
+
+## Flagged Sample Detail
+
+Full table of all samples that carry at least one flag.
+
+```{r flagged-detail}
+flagged <- sanity_check_tbl |>
+  filter(if_any(all_of(sanity_check_cols), ~ . == 1L)) |>
+  rename(
+    "Maximum_count < 10"            = sanity_check_max_lt_10,
+    "Minimum_count < 0"             = sanity_check_min_lt_0,
+    "Rounding error"      = sanity_check_rounding_error
+  )
+
+if (nrow(flagged) == 0) {
+  cat("No samples were flagged.")
+} else {
+  DT::datatable(flagged, rownames = FALSE, filter = "top",
+                options = list(pageLength = 10, scrollX = TRUE))
+}
+```
+
+## All Samples
+
+```{r all-samples}
+sanity_check_tbl |>
+  rename(
+    "Maximum_count < 10"       = sanity_check_max_lt_10,
+    "Minimum_count < 0"        = sanity_check_min_lt_0,
+    "Rounding error" = sanity_check_rounding_error
+  ) |>
+  DT::datatable(rownames = FALSE, filter = "top",
+                options = list(pageLength = 10, scrollX = TRUE))
+```
