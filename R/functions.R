@@ -792,8 +792,21 @@ alive_identification <- function(input_read_RNA_assay,
     as_tibble(rownames = ".cell") %>%
     dplyr::select(-sum, -detected)
   
-  # I HAVE TO DROP UNIQUE, AS SOON AS THE BUG IN SEURAT IS RESOLVED. UNIQUE IS BUG PRONE HERE.
-  percentage_output = PercentageFeatureSet(input_read_RNA_assay,  pattern = "^RPS|^RPL", assay = assay)
+  if (feature_nomenclature == "symbol") {
+    percentage_output = PercentageFeatureSet(input_read_RNA_assay, pattern = "^RPS|^RPL", assay = assay)
+  } else {
+    # Ensembl IDs: resolve ribo gene IDs from biomart reference
+    data(ensembl_genes_biomart)
+    ribosome_ensembl_ids <- ensembl_genes_biomart[
+      grep("^(RPL|RPS)", ensembl_genes_biomart$external_gene_name), "ensembl_gene_id"
+    ]
+    ribosome_features <- intersect(ribosome_ensembl_ids, rownames(input_read_RNA_assay))
+    percentage_output = PercentageFeatureSet(
+      input_read_RNA_assay,
+      features = if (length(ribosome_features) > 0) ribosome_features else character(0),
+      assay = assay
+    )
+  }
   percentage_output = percentage_output[!duplicated(names(percentage_output))]
   # Compute ribosome statistics
   ribosome =
