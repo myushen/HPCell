@@ -92,21 +92,30 @@ append_sanity_check_report <- function(input_hpc, target_output, rmd_path, sanit
   external_dir  <- glue("{input_hpc$initialisation$store}/external") |> as.character()
   dir.create(external_dir, showWarnings = FALSE, recursive = TRUE)
   
-  # Copy the .qmd template into the writable external dir.
-  # Quarto's --output-file sanity check only accepts a filename (not a path), so we
-  # point path= to the copy; Quarto then writes the .html right alongside it.
+  # Copy the .qmd template into the writable external dir, substituting the
+  # __TARGET_COMBINED__ placeholder with the real target name so that
+  # tarchetypes can scan the rendered copy for tar_read() dependencies.
+  # Quarto's --output-file check only accepts a filename (not a path), so
+  # Quarto writes the .html right alongside the .qmd copy.
   local_qmd <- file.path(external_dir, paste0(target_output, ".qmd"))
-  file.copy(rmd_path, local_qmd, overwrite = TRUE)
-  
+  readLines(rmd_path) |>
+    gsub("__TARGET_COMBINED__", sanity_check_tbl_target, x = _) |>
+    writeLines(local_qmd)
+
+  store_path <- as.character(input_hpc$initialisation$store)
+
   target_output |> delete_lines_with_word(target_script)
-  
-  # deployment = "main" forces the render on the login/RStudio node where
-  # Quarto is installed, not on Slurm compute workers.
+
+  # Pass only the store path (a plain string) as an execute_param so it
+  # survives YAML round-trip cleanly.  The QMD reads the combined target
+  # directly via tar_read(), and tarchetypes detects that tar_read() call
+  # when it scans the .qmd file for dependencies — so no explicit dep
+  # declaration is needed here.
   glue(
     'target_list = c(target_list, tarchetypes::tar_quarto_raw(',
     '  "{target_output}",',
     '  path = "{local_qmd}",',
-    '  execute_params = quote(list(sanity_check_tbl = {sanity_check_tbl_target})),',
+    '  execute_params = list(store = "{store_path}"),',
     '  deployment = "main",',
     '  quiet = FALSE',
     '))',

@@ -21,7 +21,7 @@ knitr:
     warning: false
     echo: false
 params:
-  sanity_check_tbl: "NA"
+  store: "NA"
 ---
 
 ```{r setup}
@@ -33,9 +33,10 @@ library(purrr)
 library(DT)
 library(targets)
 
-#sanity_check_tbl <- params[1]$sanity_check_tbl
-sanity_check_tbl <- tar_read(sanity_checked_sample_stats_combined, store = "/vast/scratch/users/shen.m/cellNexus/2024-07-01/process_updated_samples_transform_hpcell_target_store_v1"
-                     )
+# Store path is injected at render time via params$store.
+# Target name is substituted into this file when it is copied into the store's
+# external/ directory, replacing __TARGET_COMBINED__ with the real target name.
+sanity_check_tbl <- tar_read(__TARGET_COMBINED__, store = params$store)
 
 sanity_check_cols <- c("sanity_check_max_lt_10", "sanity_check_min_lt_0", "sanity_check_rounding_error")
 
