@@ -75,7 +75,7 @@ sanity_check_transform_samples.HPCell <- function(input_hpc,
       sanity_check_list     = target_output |> is_target()
     ) |>
     
-    # 3. Render QC report via tarchetypes::tar_render (rmarkdown, no Quarto needed)
+    # 3. Render QC report via tarchetypes::tar_quarto_raw
     append_sanity_check_report(
       target_output = target_report,
       rmd_path      = rmd_path,
@@ -84,9 +84,8 @@ sanity_check_transform_samples.HPCell <- function(input_hpc,
 }
 
 # Private helper: appends a tarchetypes::tar_quarto_raw target to the pipeline
-# script.  It also sniffs the Quarto binary location at pipeline-construction
-# time and embeds a Sys.setenv(QUARTO_PATH = ...) line so that worker
-# processes (which may not inherit the interactive PATH) can find the CLI.
+# script.  Quarto is located via QUARTO_PATH in the cluster's .Renviron —
+# no path sniffing needed here.
 append_sanity_check_report <- function(input_hpc, target_output, rmd_path, sanity_check_tbl_target) {
   target_script <- glue("{input_hpc$initialisation$store}.R")
   external_dir  <- glue("{input_hpc$initialisation$store}/external") |> as.character()
