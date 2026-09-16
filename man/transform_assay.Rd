@@ -26,16 +26,16 @@ transform_assay(
 \arguments{
 \item{input_hpc}{An \code{HPCell} object.}
 
-\item{fx}{A list of transformation functions (one per sample) to apply to
-the assay matrix. Defaults to \code{identity} for all samples.}
+\item{fx}{A list of per-sample transformation methods, already chosen
+outside HPCell: \code{"safe_expm1"}, \code{"expm1"}, or \code{"identity"}.}
 
 \item{target_input}{Name of the targets target providing the data object.}
 
 \item{target_output}{Name of the targets target to write the transformed
 data to.}
 
-\item{scale_max}{A list of numeric upper-bound values (one per sample)
-passed to \code{limit_max_to_scale()}. Default: \code{10} per sample.}
+\item{scale_max}{A list of numeric upper bounds (one per sample) used by
+\code{expm1} and \code{safe_expm1}. Ignored for \code{identity}. Default: \code{10} per sample.}
 
 \item{...}{Additional arguments (unused; for method dispatch).}
 }
@@ -44,6 +44,6 @@ The updated \code{HPCell} object with the transformation step appended.
 }
 \description{
 Adds a custom per-cell assay transformation step to the HPCell pipeline.
-The transformation function (e.g. log1p, identity) is applied to each
-sample's count matrix, optionally capping values at a maximum scale.
+The caller declares one of \code{identity}, \code{expm1}, or \code{safe_expm1} per sample.
+\code{identity} does not scale; \code{expm1} and \code{safe_expm1} cap at \code{scale_max}.
 }
