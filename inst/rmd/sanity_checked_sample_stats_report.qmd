@@ -33,7 +33,9 @@ library(purrr)
 library(DT)
 library(targets)
 
-sanity_check_tbl <- params$sanity_check_tbl
+# Quarto serialises execute_params through YAML, which drops the tibble/data.frame
+# class and returns a named list of columns. Restore the tibble before dplyr.
+sanity_check_tbl <- tibble::as_tibble(params$sanity_check_tbl)
 
 sanity_check_cols <- c("sanity_check_max_lt_10", "sanity_check_min_lt_0", "sanity_check_rounding_error")
 
