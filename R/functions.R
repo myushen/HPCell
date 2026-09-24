@@ -2358,8 +2358,20 @@ cell_communication <- function(input_read_RNA_assay,
 
     # Filter the number of cells in each group are less than 10
     CellChat::filterCommunication(min.cells = 10) |>
-    CellChat::computeCommunProbPathway() |>
     CellChat::aggregateNet()
+  
+  candidate_pathways <- unique(stats::na.omit(
+    as.character(cellchat@LR$LRsig$pathway_name)
+  ))
+  
+  if (length(candidate_pathways) > 1L) {
+    candidate <- cellchat |> CellChat::computeCommunProbPathway()
+    
+    # Retain netP only if at least two significant pathways remain
+    if (length(candidate@netP$pathways) > 1L) {
+      cellchat <- candidate
+    }
+  }
 
   gc()
 
